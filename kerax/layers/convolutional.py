@@ -85,13 +85,3 @@ class Conv2D(core.Layer):
             return f"Convolutional Layer with input shape {self.input_shape} and output shape {self.shape}"
         else:
             return "Convolutional Layer"
-
-
-inputs = core.Input((28,28,1))
-conv1 = Conv2D(3,3, activation='relu')(inputs)
-conv2 = Conv2D(3,3)(conv1)
-flatten = core.Flatten()(conv2)
-
-#x = np.random.random((1,28,28,1))
-
-print(conv2.shape, flatten.shape)

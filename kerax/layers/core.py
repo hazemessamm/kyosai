@@ -170,3 +170,31 @@ class Flatten(Layer):
 
 
 
+class Activation(Layer):
+    def __init__(self, identifier):
+        super(Activation, self).__init__()
+        self.identifier = identifier
+        self.activation = self.get_activation(identifier)
+    
+    def build(self, input_shape):
+        self.input_shape = self.shape = input_shape
+
+    def __call__(self, inputs):
+        if not hasattr(inputs, 'shape'):
+            raise Exception("Inputs should be tensors, or use Input layer for configuration")
+        else:
+            if isinstance(inputs, Layer) or isinstance(inputs, Input):
+                self.build(inputs.shape)
+                self.connect(inputs)
+                return self
+            else:
+                self.build(inputs.shape)
+                if self.input_shape != inputs.shape:
+                    raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
+                else:
+                    out = self.activation(inputs)
+                    return out
+
+        
+
+    
