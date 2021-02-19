@@ -9,23 +9,32 @@ from jax.random import PRNGKey
 import layers.construction_layers as cl
 
 class Input:
+    '''
+    Input Layer that stores the training data and returns batches from it 
+    params:
+    shape: takes a tuple (0, H, W, C)
+    '''
+
+
     def __init__(self, shape=None):
         if not shape or not isinstance(shape, tuple):
-            raise layer_exceptions.InputShapeNotFoundException(f'shape should have value in a tuple, found {shape}')
+            raise Exception(f'shape should have value in a tuple, found {shape}')
         self.shape = shape
+        #stores the index state
         self.index = 0
 
     def get_shape(self):
         return self.shape
 
     def set_batch_size(self, batch_size):
+        'Stores the batch size'
         if batch_size > 0:
             self.batch_size = batch_size
         else:
             raise Exception('Batch size should be bigger than zero')
 
-
     def store_data(self, x, y, **kwargs):
+        'stores the data also accepts validation_data '
         if not hasattr(self, 'batch_size'):
             raise Exception('batch size should have a value, use set_batch_size() and pass int value')
         
@@ -87,25 +96,34 @@ class Input:
 
 class Layer:
     def __init__(self):
+        #stores the layer params
         self.params = ()
+        #stores the previous layer
         self.prev = None
         self.built=False
 
     def get_initializer(self, identifier):
+        'Returns the specified initializer'
         return initializers.get(identifier)
 
     def get_activation(self, identifier):
+        'Returns the specified activation'
         return activations.get(identifier)
 
     def connect(self, layer):
+        'Connects the current layer with the previous layer'
         self.prev = layer
     
     def get_weights(self):
+        'returns weights'
         return self.params
 
     def set_weights(self, new_weights):
         if not isinstance(new_weights, tuple):
             raise Exception(f"Weights should be inside a tuple example: (W, b), found {type(new_weights)}")
+        #looping over the current weights and the new weights
+        #checks the shape of each dimension
+        #finally stores the new weights
         for current_p, new_p in zip(self.params, new_weights):
             if current_p.shape != new_p.shape:
                 raise Exception(f"New weights is not compatible with the current weight shapes, {current_p.shape} != {new_p.shape}")
@@ -113,6 +131,19 @@ class Layer:
                 self.params += (new_weights,)
 
 class Dense(Layer):
+    '''
+
+    Dense Layer, (Layer subclass)
+
+    params:
+    units: stores number of columns (neurons)
+    activation: stores the activation function, default None
+    kernel_initializer: stores the kernel initializer, default "glorot_normal"
+    bias_initializer: stores the bias initializer, default "normal"
+
+
+
+    '''
     def __init__(self, units, activation=None, kernel_initializer='glorot_normal', bias_initializer='normal', 
     input_shape=None, key=PRNGKey(1)):
         super(Dense, self).__init__()
@@ -170,8 +201,16 @@ class Dense(Layer):
             return "<Dense Layer>"
 
 class Flatten(Layer):
+    '''
+    Flatten Layer, (Layer subclass)
+    params: 
+    key: Pseudo Random Generator Key, default PRNGKey(1)
+
+    '''
     def __init__(self, key=PRNGKey(1)):
         super(Flatten, self).__init__()
+        #initializes flatten layer
+        #returns initialization function and apply function
         self.init_fn, self.apply_fn = stax.Flatten
         self.key = key
 
@@ -208,6 +247,13 @@ class Flatten(Layer):
             return "<Flatten Layer>"
 
 class Dropout(Layer):
+    '''
+    Dropout Layer, (Layer subclass)
+    params:
+    rate: probability of turning of a neuron, accepts probability values between 0 and 1
+    training: stores the mode of the layer, accepts boolean
+    key: Pseudo Random Generator Key, default PRNGKey(1)
+    '''
     def __init__(self, rate, training=False, key=PRNGKey(1)):
         self.rate = rate
         if training:
@@ -248,6 +294,11 @@ class Dropout(Layer):
 
 
 class Activation(Layer):
+    '''
+    Activation Layer, (Layer subclass)
+    params:
+    identifier: accepts the activation function as a string or callable
+    '''
     def __init__(self, identifier):
         super(Activation, self).__init__()
         self.identifier = identifier
