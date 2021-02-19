@@ -6,6 +6,7 @@ from jax import numpy as jnp
 from jax.experimental import stax
 from functools import wraps
 from jax.random import PRNGKey
+import construction_layers as cl
 
 class Input:
     def __init__(self, shape=None):
@@ -41,7 +42,7 @@ class Layer:
     def __init__(self):
         self.params = ()
         self.prev = None
-        self.is_built=False
+        self.built=False
 
     def get_initializer(self, identifier):
         return initializers.get(identifier)
@@ -90,13 +91,11 @@ class Dense(Layer):
         return self.input_shape
 
     def build(self, input_shape):
-        output_shape, params = self.init_fn(rng=self.key, input_shape=input_shape)
-        self.params = params
+        self.shape, self.params = self.init_fn(rng=self.key, input_shape=input_shape)
         self.input_shape = input_shape
-        self.kernel_shape = params[0].shape
-        self.bias_shape = params[0].shape
-        self.is_built = True
-        self.shape = output_shape
+        self.kernel_shape = self.params[0].shape
+        self.bias_shape = self.params[0].shape
+        self.built = True
 
     def call_with_external_weights(self, inputs, params):
         'Used during training to pass the parameters while getting the gradients'
@@ -120,7 +119,7 @@ class Dense(Layer):
                     return self.activation(out) if self.activation is not None else out
 
     def __repr__(self):
-        if self.is_built:
+        if self.built:
             return f"Dense Layer with input shape {self.input_shape} and output shape {self.shape}"
         else:
             return "Dense Layer"
@@ -134,11 +133,9 @@ class Flatten(Layer):
         self.key = key
 
     def build(self, input_shape):
-        output_shape, params = self.init_fn(input_shape=input_shape, rng=self.key)
-        self.shape = output_shape
+        self.shape, self.params = self.init_fn(input_shape=input_shape, rng=self.key)
         self.input_shape = input_shape
-        self.is_built = True
-        self.params = params
+        self.built = True
 
     def call_with_external_weights(self, inputs, params):
         'Used during training to pass the parameters while getting the gradients'
@@ -161,23 +158,67 @@ class Flatten(Layer):
                     out = self.apply_fn(inputs=inputs, params=self.params)
                     return out
 
-
     def __repr__(self):
-        if self.is_built:
+        if self.built:
             return f"Flatten Layer with input shape {self.input_shape} and output shape {self.shape}"
         else:
             return "Flatten Layer"
 
+class Dropout(Layer):
+    def __init__(self, rate, training=False, key=PRNGKey(1)):
+        self.rate = rate
+        if training:
+            self.mode = 'train'
+        else:
+            self.mode = 'predict'
+        self.key = key
+        self.init_fn, self.apply_fn = stax.Dropout(rate=rate, mode=mode)
+    
+    def call_with_external_weights(self, inputs, params):
+        'Used during training to pass the parameters while getting the gradients'
+        out = self.apply_fn(inputs=inputs, params=params)
+        return out
+    
+    def build(self, input_shape):
+        output_shape, self.params = self.init_fn(rng=self.key, input_shape=input_shape)
+        self.input_shape = input_shape
+        self.kernel_shape = params[0].shape
+        self.bias_shape = params[0].shape
+        self.built = True
+        self.shape = output_shape
+
+    def __call__(self, inputs):
+        if not hasattr(inputs, 'shape'):
+            raise Exception("Inputs should be tensors, or use Input layer for configuration")
+        else:
+            if isinstance(inputs, Layer) or isinstance(inputs, Input):
+                self.build(inputs.shape)
+                self.connect(inputs)
+                return self
+            else:
+                self.build(inputs.shape)
+                if self.input_shape != inputs.shape:
+                    raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
+                else:
+                    out = self.apply_fn(inputs=inputs, params=self.params)
+                    return out
 
 
 class Activation(Layer):
     def __init__(self, identifier):
         super(Activation, self).__init__()
         self.identifier = identifier
-        self.activation = self.get_activation(identifier)
+        self.init_fn, self.apply_fn = cl.Activation(identifier)
     
     def build(self, input_shape):
-        self.input_shape = self.shape = input_shape
+        self.input_shape, self.params = self.init_fn(input_shape)
+        self.shape = self.input_shape
+        self.built=True
+
+
+    def call_with_external_weights(self, inputs, params):
+        out = self.activation(inputs)
+        return out
 
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
