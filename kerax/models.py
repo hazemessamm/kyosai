@@ -1,8 +1,8 @@
+from __future__ import absolute_import
 import set_path
 from layers import core
 from layers import convolutional as c
 import numpy as np
-from jax import value_and_grad, grad
 from optimizers import optimizers
 
 class Model:
