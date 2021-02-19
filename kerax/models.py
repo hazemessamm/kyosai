@@ -90,7 +90,6 @@ class Model:
         self.input_layer.set_batch_size(batch_size)
         #stores the data to the input layer and validation data if there is validation data
         self.input_layer.store_data(x, y, validation_data=validation_data)
-        print(self.input_layer.num_batches)
 
 
         for epoch in range(epochs):

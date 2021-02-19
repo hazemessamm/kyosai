@@ -47,6 +47,6 @@ sample_y = y_test[0]
 
 print(sample_y)
 
-model.fit(x_train, y_train, epochs=40, batch_size=32)
+model.fit(x_train, y_train, epochs=40, batch_size=128)
 
 print(jnp.argmax(model(sample_x)))
