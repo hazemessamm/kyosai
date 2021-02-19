@@ -2,6 +2,7 @@ from __future__ import absolute_import
 import set_path
 from optimizers import optimizers
 
+
 class Model:
     '''
     Model class
@@ -20,12 +21,16 @@ class Model:
     
     def get_layers_and_params(self):
         'Stores the layers and paramters'
+
         #temporary variable to loop over the layers
         pointer = self.output_layer
+
         #list to store the layers
         self.layers = []
+
         #list to store the parameters
         self.trainable_params = []
+
         #looping over the layers
         while hasattr(pointer, 'prev'):
             self.layers.append(pointer)
@@ -36,6 +41,7 @@ class Model:
         'Takes the loss, optimizer and loss recorder state'
         self.loss_fn = loss
         self.optimizer = optimizers.get(optimizer)
+
         #if optimizer is string then it needs configuration
         if isinstance(optimizer, str):
             self.configure_optimizer()
@@ -56,6 +62,7 @@ class Model:
     def call_with_external_weights(self, x, params):
         'Takes inputs and params and returns predictions'
         for i, layer in enumerate(self.layers):
+            print('=', end='')
             x = layer.call_with_external_weights(x, params[i])
         return x
 
@@ -82,8 +89,9 @@ class Model:
         for epoch in range(epochs):
             #gets a batch and pass it to the model
             batch_x, batch_y = self.input_layer()
+            print(batch_x.shape)
             #gets the loss
-            loss = self.train_step(x, y)
+            loss = self.train_step(batch_x, batch_y)
             print(f"Training Loss: {loss}")
             if validation_data is not None:
                 batch_x, batch_y = self.input_layer.get_validation_batch()

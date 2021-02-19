@@ -2,6 +2,7 @@ from __future__ import absolute_import
 import set_path
 from jax.experimental import optimizers
 from jax import value_and_grad, grad
+from jax import jit, vmap
 
 class Optimizer:
     '''
@@ -90,6 +91,7 @@ class Adam(Optimizer):
         self.epsilon = epsilon
         self.init_fn, self.update_fn, self.get_params = optimizers.sgd(learning_rate)
         self.optimizer_state = self.init_fn(model.trainable_params)
+        self.update_fn = jit(self.update_fn)
 
     def apply_grads(self, grads, step=0):
         self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)

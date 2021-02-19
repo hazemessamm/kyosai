@@ -3,6 +3,7 @@ import set_path
 from initializers import initializers
 from activations import activations
 from jax import numpy as jnp
+from jax import jit, vmap
 from jax.experimental import stax
 from functools import wraps
 from jax.random import PRNGKey
@@ -127,8 +128,9 @@ class Layer:
         for current_p, new_p in zip(self.params, new_weights):
             if current_p.shape != new_p.shape:
                 raise Exception(f"New weights is not compatible with the current weight shapes, {current_p.shape} != {new_p.shape}")
-            else:
-                self.params += (new_weights,)
+        
+        self.params = new_weights
+
 
 class Dense(Layer):
     '''
@@ -145,7 +147,7 @@ class Dense(Layer):
 
     '''
     def __init__(self, units, activation=None, kernel_initializer='glorot_normal', bias_initializer='normal', 
-    input_shape=None, key=PRNGKey(1)):
+    input_shape=None, key=PRNGKey(10)):
         super(Dense, self).__init__()
         self.units = units
         self.activation = self.get_activation(activation)
@@ -153,6 +155,7 @@ class Dense(Layer):
         self.bias_initializer = self.get_initializer(bias_initializer)
         self.key = key
         self.init_fn, self.apply_fn = stax.Dense(units, W_init=self.kernel_initializer, b_init=self.bias_initializer)
+        self.apply_fn = jit(self.apply_fn)
     
     def get_kernel_shape(self):
         return self.kernel_shape
@@ -213,6 +216,7 @@ class Flatten(Layer):
         #returns initialization function and apply function
         self.init_fn, self.apply_fn = stax.Flatten
         self.key = key
+        self.apply_fn = jit(self.apply_fn)
 
     def build(self, input_shape):
         self.shape, self.params = self.init_fn(input_shape=input_shape, rng=self.key)
