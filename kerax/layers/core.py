@@ -52,11 +52,11 @@ class Input:
         self.num_batches = self.data_length // self.batch_size
         self.built=True
         if kwargs.get('validation_data', None) is not None:
+            self.validation_data, self.validation_labels = kwargs.get('validation_data')
             if len(self.validation_data) != len(self.validation_labels):
                 raise Exception(f'Validation data should be equal validation labels, {len(x)} != {len(y)}')
-            self.validation_data, self.validation_labels = kwargs.get('validation_data')
             self.validation_length = len(self.validation_data)
-            self.validation_index
+            self.validation_index = 0
             
 
     def check_index_range(self, index_range, required_length):
@@ -146,7 +146,7 @@ class Dense(Layer):
 
     '''
     def __init__(self, units, activation=None, kernel_initializer='glorot_normal', bias_initializer='normal', 
-    input_shape=None, key=PRNGKey(10)):
+    input_shape=None, key=PRNGKey(100)):
         super(Dense, self).__init__()
         self.units = units
         self.activation = self.get_activation(activation)

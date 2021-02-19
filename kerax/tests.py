@@ -15,10 +15,10 @@ conv1 = c.Conv2D(128,3, activation='relu')(inputs)
 conv2 = c.Conv2D(64,3, activation='relu')(conv1)
 flatten = core.Flatten()(conv2)
 dense = core.Dense(256, activation='relu')(flatten)
-output = core.Dense(10, activation='softmax')(dense)
-#output_activation = core.Activation('log_softmax')(output)
+output = core.Dense(10)(dense)
+output_activation = core.Activation('log_softmax')(output)
 
-model = models.Model(inputs, output)
+model = models.Model(inputs, output_activation)
 
 
 
@@ -28,7 +28,7 @@ def loss(params, x, y):
 
 adam = optimizers.Adam(loss_fn=loss, model=model)
 
-model.compile(loss=loss, optimizer='adam')
+model.compile(loss=loss, optimizer='sgd')
 
 
 from tensorflow.keras.datasets import mnist
@@ -38,6 +38,8 @@ x_train = np.expand_dims(x_train, -1)
 x_test = x_test.astype('float32')
 x_test = np.expand_dims(x_test, -1)
 y_train = y_train.astype('float32')
+x_train /= 255.0
+
 
 y_train = to_categorical(y_train, 10)
 
@@ -47,6 +49,6 @@ sample_y = y_test[0]
 
 print(sample_y)
 
-model.fit(x_train, y_train, epochs=40, batch_size=128)
+model.fit(x_train, y_train, epochs=40, batch_size=64, validation_data=(x_test, y_test))
 
 print(jnp.argmax(model(sample_x)))

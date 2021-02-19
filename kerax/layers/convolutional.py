@@ -45,7 +45,7 @@ class Conv2D(core.Layer):
     def __init__(self, filters, kernel_size, 
                  strides=(1,1), padding='valid', activation=None, 
                  kernel_initializer='glorot_uniform', bias_initializer='normal', 
-                 key=PRNGKey(10), input_dim_order="NHWC", kernel_dim_order="HWIO", output_dim_order="NHWC"):
+                 key=PRNGKey(100), input_dim_order="NHWC", kernel_dim_order="HWIO", output_dim_order="NHWC"):
         super(Conv2D, self).__init__()
         self.filters = filters
         self.kernel_size = kernel_size

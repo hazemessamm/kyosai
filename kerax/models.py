@@ -19,6 +19,7 @@ class Model:
         self.trainable_params = self.trainable_params[::-1]
         self.predict = self.__call__
         self.predict_with_external_weights = self.call_with_external_weights
+ 
     
     def get_layers_and_params(self):
         'Stores the layers and paramters'
@@ -77,7 +78,7 @@ class Model:
         training_loss = self.optimizer.step(x, y)
         if kwargs.get('validation_data', None) is not None:
             batch_x, batch_y = self.input_layer.get_validation_batch()
-            validation_loss = self.loss_fn(model.trainable_params, batch_x, batch_y)
+            validation_loss = self.loss_fn(self.trainable_params, batch_x, batch_y)
             return training_loss, validation_loss
         return training_loss
 
@@ -96,17 +97,16 @@ class Model:
             epoch_training_loss = 0
             epoch_validation_loss = 0 
             #gets a batch and pass it to the model
-            batch_x, batch_y = self.input_layer()
             for _ in range(self.input_layer.num_batches):
+                batch_x, batch_y = self.input_layer()
                 loss = self.train_step(batch_x, batch_y, validation_data=validation_data)
-                sys.stdout.write(f"Progress {self.input_layer.training_index}/{self.input_layer.num_batches}\r")
+                sys.stdout.write(f"Progress {self.input_layer.training_index}/{self.input_layer.num_batches} Loss: {loss}  \r")
                 sys.stdout.flush()
                 if isinstance(loss, tuple):
                     epoch_training_loss += loss[0]
                     epoch_validation_loss += loss[1]
                 else:
                     epoch_training_loss += loss
-                batch_x, batch_y = self.input_layer()
 
             if validation_data is not None:
                 print(f"Training loss: {jnp.mean(epoch_training_loss)}, Validation loss: {jnp.mean(epoch_validation_loss)}")

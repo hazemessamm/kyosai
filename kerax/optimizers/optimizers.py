@@ -58,9 +58,10 @@ class SGD(Optimizer):
         #init function just takes the current model params
         #update function takes the step index, gradients and the current optimizer state
         #get params takes the optimizer state and returns the params
-        self.init_fn, self.update_fn, self.get_params = optimizers.sgd(learning_rate)
+        self.init_fn, self.update_fn, self.get_params = optimizers.sgd(step_size=learning_rate)
         #declars optimizer state and takes model current trainable params
         self.optimizer_state = self.init_fn(model.trainable_params)
+        self.update_fn = jit(self.update_fn)
 
     def apply_grads(self, grads, step=0):
         'Updates the model params'
@@ -89,7 +90,7 @@ class Adam(Optimizer):
         self.beta_1 = beta_1
         self.beta_2 = beta_2
         self.epsilon = epsilon
-        self.init_fn, self.update_fn, self.get_params = optimizers.adam(learning_rate, b1=beta_1, b2=beta_2, eps=epsilon)
+        self.init_fn, self.update_fn, self.get_params = optimizers.adam(step_size=learning_rate, b1=beta_1, b2=beta_2, eps=epsilon)
         self.optimizer_state = self.init_fn(model.trainable_params)
         self.update_fn = jit(self.update_fn)
 
@@ -112,8 +113,9 @@ class Adagrad(Optimizer):
     def __init__(self, loss_fn, model, learning_rate=0.001, momentum=0.9):
         super(Adagrad, self).__init__(loss_fn=loss_fn, model=model, learning_rate=learning_rate)
         self.momentum = momentum
-        self.init_fn, self.update_fn, self.get_params = optimizers.adagrad(learning_rate, momentum=momentum)
+        self.init_fn, self.update_fn, self.get_params = optimizers.adagrad(step_size=learning_rate, momentum=momentum)
         self.optimizer_state = self.init_fn(model.trainable_params)
+        self.update_fn = jit(self.update_fn)
     
     def apply_grads(self, grads, step=0):
         self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
