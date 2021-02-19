@@ -89,7 +89,7 @@ class Adam(Optimizer):
         self.beta_1 = beta_1
         self.beta_2 = beta_2
         self.epsilon = epsilon
-        self.init_fn, self.update_fn, self.get_params = optimizers.adam(learning_rate, )
+        self.init_fn, self.update_fn, self.get_params = optimizers.adam(learning_rate, b1=beta_1, b2=beta_2, eps=epsilon)
         self.optimizer_state = self.init_fn(model.trainable_params)
         self.update_fn = jit(self.update_fn)
 
@@ -112,7 +112,7 @@ class Adagrad(Optimizer):
     def __init__(self, loss_fn, model, learning_rate=0.001, momentum=0.9):
         super(Adagrad, self).__init__(loss_fn=loss_fn, model=model, learning_rate=learning_rate)
         self.momentum = momentum
-        self.init_fn, self.update_fn, self.get_params = optimizers.adagrad(learning_rate)
+        self.init_fn, self.update_fn, self.get_params = optimizers.adagrad(learning_rate, momentum=momentum)
         self.optimizer_state = self.init_fn(model.trainable_params)
     
     def apply_grads(self, grads, step=0):

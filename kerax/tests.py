@@ -26,9 +26,9 @@ def loss(params, x, y):
     preds = model.call_with_external_weights(x, params)
     return jnp.mean(-jnp.log(preds[y]))
 
-sgd = optimizers.Adam(loss_fn=loss, model=model)
+adam = optimizers.Adam(loss_fn=loss, model=model)
 
-model.compile(loss=loss, optimizer='sgd')
+model.compile(loss=loss, optimizer='adam')
 
 
 from tensorflow.keras.datasets import mnist

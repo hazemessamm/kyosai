@@ -99,7 +99,7 @@ class Model:
             batch_x, batch_y = self.input_layer()
             for _ in range(self.input_layer.num_batches):
                 loss = self.train_step(batch_x, batch_y, validation_data=validation_data)
-                sys.stdout.write(f"Progress {self.input_layer.training_index}/{self.input_layer.num_batches} \r")
+                sys.stdout.write(f"Progress {self.input_layer.training_index}/{self.input_layer.num_batches}\r")
                 sys.stdout.flush()
                 if isinstance(loss, tuple):
                     epoch_training_loss += loss[0]
