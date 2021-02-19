@@ -13,7 +13,6 @@ class Input:
         if not shape or not isinstance(shape, tuple):
             raise layer_exceptions.InputShapeNotFoundException(f'shape should have value in a tuple, found {shape}')
         self.shape = shape
-        self.batch_size = None
         self.index = 0
 
     def get_shape(self):
@@ -25,10 +24,27 @@ class Input:
         else:
             raise Exception('Batch size should be bigger than zero')
 
-    def store_data(self, x, y):
-        self.training_data = X
+
+    def store_data(self, x, y, **kwargs):
+        if not hasattr(self, 'batch_size'):
+            raise Exception('batch size should have a value, use set_batch_size() and pass int value')
+        
+        if len(x) < self.batch_size:
+            raise Exception('batch size should be smaller than the training data')
+
+        if len(x) != len(y):
+            raise Exception(f"Training data should be equal training labels, {len(x)} != {len(y)}")
+        
+        self.training_data = x
         self.training_labels = y
-        self.stored_data = True
+        self.data_length = len(x)
+        self.built=True
+        if kwargs.get('validation_data', None) is not None:
+            if len(self.validation_data) != len(self.validation_labels):
+                raise Exception(f'Validation data should be equal validation labels, {len(x)} != {len(y)}')
+            self.validation_data, self.validation_labels = kwargs.get('validation_data')
+            self.validation_length = len(self.validation_data)
+            
 
     def reset_index(self):
         self.index = 0
@@ -36,12 +52,35 @@ class Input:
     def increment_index(self):
         self.index += 1
 
-    def __call__(self):
-        current_batch_index = index*self.batch_size
-        current_batch_x = self.training_data[current_batch_index: current_batch_index+self.batch_size]
-        current_batch_y = self.training_labels[current_batch_index: current_batch_index+self.batch_size]
+    def check_index_range(self, index_range, required_length):
+        if index_range > required_length:
+            return True
+        else:
+            return False
 
-        return current_batch_x, current_batch_y
+    def __call__(self):
+        if hasattr(self, 'built'):
+            current_batch_index = self.index*self.batch_size
+            status = self.check_index_range(current_batch_index+self.batch_size, self.data_length)
+            if status:
+                self.reset_index()
+                current_batch_index = 0
+            current_batch_x = self.training_data[current_batch_index: current_batch_index+self.batch_size]
+            current_batch_y = self.training_labels[current_batch_index: current_batch_index+self.batch_size]
+            self.increment_index()
+            return current_batch_x, current_batch_y
+
+    def get_validation_batch(self):
+        if hasattr(self, 'built'):
+            current_batch_index = self.index*self.batch_size
+            status = self.check_index_range(current_batch_index+self.batch_size, self.validation_length)
+            if status:
+                self.reset_index()
+                current_batch_index = 0
+            current_batch_x = self.validation_data[current_batch_index: current_batch_index+self.batch_size]
+            current_batch_y = self.validation_labels[current_batch_index: current_batch_index+self.batch_size]
+            self.increment_index()
+            return current_batch_x, current_batch_y
 
     def __repr__(self):
         return "<Input Layer>"
@@ -67,13 +106,11 @@ class Layer:
     def set_weights(self, new_weights):
         if not isinstance(new_weights, tuple):
             raise Exception(f"Weights should be inside a tuple example: (W, b), found {type(new_weights)}")
-
         for current_p, new_p in zip(self.params, new_weights):
             if current_p.shape != new_p.shape:
                 raise Exception(f"New weights is not compatible with the current weight shapes, {current_p.shape} != {new_p.shape}")
             else:
                 self.params += (new_weights,)
-
 
 class Dense(Layer):
     def __init__(self, units, activation=None, kernel_initializer='glorot_normal', bias_initializer='normal', 
@@ -131,8 +168,6 @@ class Dense(Layer):
             return f"<Dense Layer with input shape {self.input_shape} and output shape {self.shape}>"
         else:
             return "<Dense Layer>"
-
-
 
 class Flatten(Layer):
     def __init__(self, key=PRNGKey(1)):
@@ -246,7 +281,3 @@ class Activation(Layer):
     def __repr__(self):
         if self.built:
             return f"<{self.identifier} Activation Layer with input shape {self.input_shape} and output shape {self.shape}>"
-
-        
-
-    

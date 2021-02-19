@@ -13,3 +13,4 @@ def Activation(identifier):
         return out
     
     return init_fn, apply_fn
+
