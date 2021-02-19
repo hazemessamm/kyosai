@@ -14,6 +14,7 @@ class Model:
         self.layers = self.layers[::-1]
         self.trainable_params = self.trainable_params[::-1]
         self.predict = self.__call__
+        self.predict_with_external_weights = self.call_with_external_weights
     
     def get_layers_and_params(self):
         pointer = self.output_layer
