@@ -36,6 +36,9 @@ class Input:
 
         return current_batch_x, current_batch_y
 
+    def __repr__(self):
+        return "<Input Layer>"
+
 class Layer:
     def __init__(self):
         self.params = ()
@@ -118,9 +121,9 @@ class Dense(Layer):
 
     def __repr__(self):
         if self.built:
-            return f"Dense Layer with input shape {self.input_shape} and output shape {self.shape}"
+            return f"<Dense Layer with input shape {self.input_shape} and output shape {self.shape}>"
         else:
-            return "Dense Layer"
+            return "<Dense Layer>"
 
 
 
@@ -158,9 +161,9 @@ class Flatten(Layer):
 
     def __repr__(self):
         if self.built:
-            return f"Flatten Layer with input shape {self.input_shape} and output shape {self.shape}"
+            return f"<Flatten Layer with input shape {self.input_shape} and output shape {self.shape}>"
         else:
-            return "Flatten Layer"
+            return "<Flatten Layer>"
 
 class Dropout(Layer):
     def __init__(self, rate, training=False, key=PRNGKey(1)):
@@ -214,7 +217,7 @@ class Activation(Layer):
         self.built=True
 
     def call_with_external_weights(self, inputs, params):
-        out = self.activation(inputs)
+        out = self.apply_fn(inputs, params)
         return out
 
     def __call__(self, inputs):
@@ -230,7 +233,7 @@ class Activation(Layer):
                 if self.input_shape != inputs.shape:
                     raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
                 else:
-                    out = self.activation(inputs)
+                    out = self.apply_fn(inputs, self.params)
                     return out
 
     def __repr__(self):

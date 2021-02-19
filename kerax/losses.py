@@ -15,3 +15,6 @@ def Huber(params, x, y):
 
 def CosineSimilarity(params, x, y):
     pass
+
+def DummyLossForTesting(params, x, y):
+    pass

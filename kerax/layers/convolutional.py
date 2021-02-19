@@ -83,9 +83,9 @@ class Conv2D(core.Layer):
 
     def __repr__(self):
         if self.built:
-            return f"Convolutional Layer with input shape {self.input_shape} and output shape {self.shape}"
+            return f"<Convolutional Layer with input shape {self.input_shape} and output shape {self.shape}>"
         else:
-            return "Convolutional Layer"
+            return "<Convolutional Layer>"
 
 class MaxPool2D(core.Layer):
     def __init__(self, pool_size=(2,2), strides=None, padding='valid', spec=None, key=PRNGKey(1)):
@@ -122,6 +122,6 @@ class MaxPool2D(core.Layer):
                     return self.activation(out) if self.activation is not None else out
     def __repr__(self):
         if self.built:
-            return f"Convolutional Layer with input shape {self.input_shape} and output shape {self.shape}"
+            return f"<MaxPool Layer with input shape {self.input_shape} and output shape {self.shape}>"
         else:
-            return "Convolutional Layer"
+            return "<MaxPool Layer>"
