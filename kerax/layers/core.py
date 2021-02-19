@@ -3,7 +3,8 @@ import set_path
 from initializers import initializers
 from activations import activations
 from jax import numpy as jnp
-from jax import jit, vmap
+from jax import jit
+from jax.nn.initializers import normal
 from jax.experimental import stax
 from functools import wraps
 from jax.random import PRNGKey

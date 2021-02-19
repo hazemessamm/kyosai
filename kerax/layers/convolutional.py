@@ -3,6 +3,7 @@ from jax import lax, nn
 from jax.experimental import stax
 from jax import numpy as jnp
 from jax import jit
+from jax.nn.initializers import normal
 from jax.random import PRNGKey
 import layers.core as core
 import numpy as np
