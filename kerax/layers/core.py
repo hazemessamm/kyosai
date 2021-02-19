@@ -6,7 +6,7 @@ from jax import numpy as jnp
 from jax.experimental import stax
 from functools import wraps
 from jax.random import PRNGKey
-import construction_layers as cl
+import layers.construction_layers as cl
 
 class Input:
     def __init__(self, shape=None):
@@ -213,7 +213,6 @@ class Activation(Layer):
         self.shape = self.input_shape
         self.built=True
 
-
     def call_with_external_weights(self, inputs, params):
         out = self.activation(inputs)
         return out
@@ -233,6 +232,10 @@ class Activation(Layer):
                 else:
                     out = self.activation(inputs)
                     return out
+
+    def __repr__(self):
+        if self.built:
+            return f"<{self.identifier} Activation Layer with input shape {self.input_shape} and output shape {self.shape}>"
 
         
 

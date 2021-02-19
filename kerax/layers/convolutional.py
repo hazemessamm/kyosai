@@ -1,9 +1,10 @@
+import set_path
 from jax import lax, nn
 from jax.experimental import stax
 from jax import numpy as jnp
 from jax import jit
 from jax.random import PRNGKey
-import core
+import layers.core as core
 import numpy as np
 
 
