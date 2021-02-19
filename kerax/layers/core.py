@@ -22,7 +22,8 @@ class Input:
             raise Exception(f'shape should have value in a tuple, found {shape}')
         self.shape = shape
         #stores the index state
-        self.index = 0
+        self.training_index = 0
+    
 
     def get_shape(self):
         return self.shape
@@ -48,19 +49,15 @@ class Input:
         self.training_data = x
         self.training_labels = y
         self.data_length = len(x)
+        self.num_batches = self.data_length // self.batch_size
         self.built=True
         if kwargs.get('validation_data', None) is not None:
             if len(self.validation_data) != len(self.validation_labels):
                 raise Exception(f'Validation data should be equal validation labels, {len(x)} != {len(y)}')
             self.validation_data, self.validation_labels = kwargs.get('validation_data')
             self.validation_length = len(self.validation_data)
+            self.validation_index
             
-
-    def reset_index(self):
-        self.index = 0
-    
-    def increment_index(self):
-        self.index += 1
 
     def check_index_range(self, index_range, required_length):
         if index_range > required_length:
@@ -70,27 +67,29 @@ class Input:
 
     def __call__(self):
         if hasattr(self, 'built'):
-            current_batch_index = self.index*self.batch_size
+            current_batch_index = self.training_index*self.batch_size
             status = self.check_index_range(current_batch_index+self.batch_size, self.data_length)
             if status:
-                self.reset_index()
+                self.training_index = 0
                 current_batch_index = 0
             current_batch_x = self.training_data[current_batch_index: current_batch_index+self.batch_size]
             current_batch_y = self.training_labels[current_batch_index: current_batch_index+self.batch_size]
-            self.increment_index()
+            self.training_index += 1
             return current_batch_x, current_batch_y
 
     def get_validation_batch(self):
-        if hasattr(self, 'built'):
-            current_batch_index = self.index*self.batch_size
+        if hasattr(self, 'validation_index'):
+            current_batch_index = self.validation_index*self.batch_size
             status = self.check_index_range(current_batch_index+self.batch_size, self.validation_length)
             if status:
-                self.reset_index()
+                self.validation_index = 0
                 current_batch_index = 0
             current_batch_x = self.validation_data[current_batch_index: current_batch_index+self.batch_size]
             current_batch_y = self.validation_labels[current_batch_index: current_batch_index+self.batch_size]
-            self.increment_index()
+            self.validation_index += 1
             return current_batch_x, current_batch_y
+        else:
+            raise Exception('Validation data is not initialized')
 
     def __repr__(self):
         return "<Input Layer>"

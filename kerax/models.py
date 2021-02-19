@@ -1,7 +1,8 @@
 from __future__ import absolute_import
 import set_path
 from optimizers import optimizers
-
+import sys
+from jax import numpy as jnp
 
 class Model:
     '''
@@ -62,7 +63,6 @@ class Model:
     def call_with_external_weights(self, x, params):
         'Takes inputs and params and returns predictions'
         for i, layer in enumerate(self.layers):
-            print('=', end='')
             x = layer.call_with_external_weights(x, params[i])
         return x
 
@@ -72,10 +72,14 @@ class Model:
             layer.set_weights(w)
         self.trainable_params = weights
 
-    def train_step(self, x, y):
+    def train_step(self, x, y, **kwargs):
         'Returns loss value and takes training batch'
-        loss = self.optimizer.step(x, y)
-        return loss
+        training_loss = self.optimizer.step(x, y)
+        if kwargs.get('validation_data', None) is not None:
+            batch_x, batch_y = self.input_layer.get_validation_batch()
+            validation_loss = self.loss_fn(model.trainable_params, batch_x, batch_y)
+            return training_loss, validation_loss
+        return training_loss
 
     def fit(self, x, y, epochs=1, batch_size=1, validation_data=None):
         #if the model is not compiled then it will raise exception
@@ -86,16 +90,30 @@ class Model:
         self.input_layer.set_batch_size(batch_size)
         #stores the data to the input layer and validation data if there is validation data
         self.input_layer.store_data(x, y, validation_data=validation_data)
+        print(self.input_layer.num_batches)
+
+
         for epoch in range(epochs):
+            epoch_training_loss = 0
+            epoch_validation_loss = 0 
             #gets a batch and pass it to the model
             batch_x, batch_y = self.input_layer()
-            print(batch_x.shape)
-            #gets the loss
-            loss = self.train_step(batch_x, batch_y)
-            print(f"Training Loss: {loss}")
+            for _ in range(self.input_layer.num_batches):
+                loss = self.train_step(batch_x, batch_y, validation_data=validation_data)
+                sys.stdout.write(f"Progress {self.input_layer.training_index}/{self.input_layer.num_batches} \r")
+                sys.stdout.flush()
+                if isinstance(loss, tuple):
+                    epoch_training_loss += loss[0]
+                    epoch_validation_loss += loss[1]
+                else:
+                    epoch_training_loss += loss
+                batch_x, batch_y = self.input_layer()
+
             if validation_data is not None:
-                batch_x, batch_y = self.input_layer.get_validation_batch()
-                loss = self.loss_fn(model.trainable_params, batch_x, batch_y)
-                print(f'Validation Loss: {loss}')
+                print(f"Training loss: {jnp.mean(epoch_training_loss)}, Validation loss: {jnp.mean(epoch_validation_loss)}")
+            else:
+                print(f"Training loss: {epoch_training_loss}")
+                
+            
 
 
