@@ -14,6 +14,7 @@ class Input:
             raise layer_exceptions.InputShapeNotFoundException(f'shape should have value in a tuple, found {shape}')
         self.shape = shape
         self.batch_size = None
+        self.index = 0
 
     def get_shape(self):
         return self.shape
@@ -29,7 +30,13 @@ class Input:
         self.training_labels = y
         self.stored_data = True
 
-    def __call__(self, index):
+    def reset_index(self):
+        self.index = 0
+    
+    def increment_index(self):
+        self.index += 1
+
+    def __call__(self):
         current_batch_index = index*self.batch_size
         current_batch_x = self.training_data[current_batch_index: current_batch_index+self.batch_size]
         current_batch_y = self.training_labels[current_batch_index: current_batch_index+self.batch_size]
@@ -73,7 +80,7 @@ class Dense(Layer):
     input_shape=None, key=PRNGKey(1)):
         super(Dense, self).__init__()
         self.units = units
-        self.activation = activation
+        self.activation = self.get_activation(activation)
         self.kernel_initializer = self.get_initializer(kernel_initializer)
         self.bias_initializer = self.get_initializer(bias_initializer)
         self.key = key
