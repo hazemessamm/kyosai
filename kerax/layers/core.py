@@ -36,8 +36,6 @@ class Input:
 
         return current_batch_x, current_batch_y
 
-
-#plans -> should be a subclass of TrackableResource
 class Layer:
     def __init__(self):
         self.params = ()
