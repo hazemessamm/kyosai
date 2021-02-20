@@ -18,10 +18,9 @@ conv1 = c.Conv2D(128,3, activation='relu')(inputs)
 conv2 = c.Conv2D(64,3, activation='relu')(conv1)
 flatten = core.Flatten()(conv2)
 dense = core.Dense(512, activation='relu')(flatten)
-output = core.Dense(10)(dense)
-output_activation = core.Activation('softmax')(output)
+output = core.Dense(10, activation='softmax')(dense)
 
-model = models.Model(inputs, output_activation)
+model = models.Model(inputs, output)
 
 def loss(params, x, y):
     preds = model.call_with_external_weights(x, params)
@@ -30,6 +29,7 @@ def loss(params, x, y):
 adam = optimizers.Adam(loss_fn=loss, model=model)
 
 model.compile(loss=loss, optimizer='sgd')
+
 
 
 from tensorflow.keras.datasets import mnist
@@ -49,8 +49,9 @@ sample = x_test[0]
 sample_x = jnp.expand_dims(sample, 0)
 sample_y = y_test[0]
 
-print(sample_y)
 
 model.fit(x_train, y_train, epochs=40, batch_size=64, validation_data=(x_test, y_test))
+
+
 
 print(jnp.argmax(model(sample_x)))

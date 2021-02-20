@@ -3,6 +3,7 @@ import set_path
 from optimizers import optimizers
 import sys
 from jax import numpy as jnp
+from utils import Progbar
 
 class Model:
     '''
@@ -39,16 +40,15 @@ class Model:
             self.trainable_params.append(pointer.get_weights())
             pointer = pointer.prev
 
-    def compile(self, loss, optimizer, record_loss=False):
+    def compile(self, loss, optimizer, metrics=['Loss', 'Remaining epochs']):
         'Takes the loss, optimizer and loss recorder state'
         self.loss_fn = loss
         self.optimizer = optimizers.get(optimizer)
+        self.metrics = metrics
 
         #if optimizer is string then it needs configuration
         if isinstance(optimizer, str):
             self.configure_optimizer()
-        if record_loss:
-            self.loss_history = []
     
     def configure_optimizer(self):
         'Configure the optimizer'
@@ -92,21 +92,25 @@ class Model:
         #stores the data to the input layer and validation data if there is validation data
         self.input_layer.store_data(x, y, validation_data=validation_data)
 
+        if validation_data is not None:
+            self.metrics += ['Validation loss']
+        
+        prgbar = Progbar(self.input_layer.num_batches, stateful_metrics=self.metrics)
+
 
         for epoch in range(epochs):
-            epoch_training_loss = 0
-            epoch_validation_loss = 0 
+            finished_batches = 0
             #gets a batch and pass it to the model
             for _ in range(self.input_layer.num_batches):
-                batch_x, batch_y = self.input_layer()
-                loss = self.train_step(batch_x, batch_y, validation_data=validation_data)
-                sys.stdout.write(f"Progress {self.input_layer.training_index}/{self.input_layer.num_batches} Loss: {loss}  \r")
-                sys.stdout.flush()
+                batch_x, batch_y = self.input_layer.get_training_batch()
+                loss = self.train_step(batch_x, batch_y, validation_data=validation_data)                
+                values = None
                 if isinstance(loss, tuple):
-                    epoch_training_loss += loss[0]
-                    epoch_validation_loss += loss[1]
+                    values = [('Remaining epochs', epochs-epoch), ('Loss', loss[0]), ('Validation loss', loss[1])]
                 else:
-                    epoch_training_loss += loss
+                    values = [('Remaining epochs', epochs-epoch), ('Loss', loss)]
+                finished_batches += 1
+                prgbar.update(finished_batches, values=values)
 
             if validation_data is not None:
                 print(f"Training loss: {jnp.mean(epoch_training_loss)}, Validation loss: {jnp.mean(epoch_validation_loss)}")

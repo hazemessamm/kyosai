@@ -65,8 +65,11 @@ class Input:
             return True
         else:
             return False
+    
+    def __call__(self, x):
+        return x
 
-    def __call__(self):
+    def get_training_batch(self):
         if hasattr(self, 'built'):
             current_batch_index = self.training_index*self.batch_size
             status = self.check_index_range(current_batch_index+self.batch_size, self.data_length)
@@ -142,8 +145,6 @@ class Dense(Layer):
     activation: stores the activation function, default None
     kernel_initializer: stores the kernel initializer, default "glorot_normal"
     bias_initializer: stores the bias initializer, default "normal"
-
-
 
     '''
     def __init__(self, units, activation=None, kernel_initializer='glorot_normal', bias_initializer='normal', 
