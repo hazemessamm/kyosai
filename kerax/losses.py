@@ -18,3 +18,6 @@ def CosineSimilarity(params, x, y):
 
 def DummyLossForTesting(params, x, y):
     pass
+
+def BinaryCrossEntropy(params, x, y):
+    pass
