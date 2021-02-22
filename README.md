@@ -12,7 +12,19 @@ Deep Learning library based on JAX and inspired from Keras
 - [ ] Add more optimizers 
 ---
 
-
+---
+`
+from layers import core
+import models
+from layers import convolutional as c
+import numpy as np
+from jax import numpy as jnp
+from optimizers import optimizers
+from utils import to_categorical
+from jax.scipy.special import logsumexp
+from jax import nn
+`
+---
 
 
 ### Currently It's not fully ready, so there is no setup.py file
