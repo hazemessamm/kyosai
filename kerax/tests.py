@@ -28,7 +28,7 @@ def loss(params, x, y):
 
 adam = optimizers.Adam(loss_fn=loss, model=model)
 
-model.compile(loss=loss, optimizer='sgd')
+model.compile(loss=loss, optimizer='adam')
 
 
 
@@ -51,3 +51,34 @@ sample_y = y_test[0]
 model.fit(x_train, y_train, epochs=40, batch_size=64, validation_data=(x_test, y_test))
 
 print(jnp.argmax(model(sample_x)))
+
+
+'''
+Tests with sequential model
+
+import numpy as np
+
+def loss(params, x, y):
+    preds = model.call_with_external_weights(x, params)
+    return jnp.mean(-jnp.log(preds[y]))
+
+
+layers = [core.Input((28, 28, 1)), cl.Conv2D(3,3), cl.Conv2D(3,3), core.Flatten()]
+model = Sequential()
+model.add(core.Input((28,28,1)))
+model.add(cl.Conv2D(3,3))
+model.add(cl.Conv2D(3,3))
+model.add(core.Flatten())
+model.add(core.Dense(10, activation='softmax'))
+model.compile(loss=loss, optimizer='adam')
+
+x = np.random.random((64, 28,28,1))
+y = [np.random.randint(11) for i in range(64)]
+y = np.array(y)
+from utils import to_categorical, to_numbers
+y = to_categorical(y)
+
+
+model.fit(x, y)
+
+'''

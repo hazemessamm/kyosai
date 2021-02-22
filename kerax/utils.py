@@ -7,8 +7,11 @@ import time
 def to_categorical(inputs, num_classes=None):
     if num_classes is None:
         num_classes = np.max(inputs, axis=-1)
-    return inputs[:, None] == np.arange(num_classes)
+    return (inputs[:, None] == np.arange(num_classes)).astype('int')
 
+
+def to_numbers(inputs):
+  return np.argmax(inputs, axis=-1)
 
 
 class Sequence:
@@ -21,6 +24,10 @@ class Sequence:
 
     def __getitem__(self, index):
         raise NotImplementedError
+
+
+
+
 
 '''
 Progbar was taken from tensorflow.keras.utils

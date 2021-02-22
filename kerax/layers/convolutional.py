@@ -1,11 +1,10 @@
-import set_path
 from jax import lax, nn
 from jax.experimental import stax
 from jax import numpy as jnp
 from jax import jit
 from jax.nn.initializers import normal
 from jax.random import PRNGKey
-import layers.core as core
+from layers import core
 import numpy as np
 
 
@@ -63,6 +62,7 @@ class Conv2D(core.Layer):
         self.init_fn, self.apply_fn = stax.GeneralConv(dimension_numbers=self.dimension_numbers, 
         filter_shape=self.kernel_size, padding=padding, out_chan=filters, W_init=self.kernel_initializer, b_init=self.bias_initializer)
         self.apply_fn = jit(self.apply_fn)
+        self.predict_with_external_weights = self.call_with_external_weights
 
 
     def get_kernel_shape(self):

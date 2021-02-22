@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-import set_path
 from initializers import initializers
 from activations import activations
 from jax import numpy as jnp

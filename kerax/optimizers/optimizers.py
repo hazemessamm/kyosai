@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-import set_path
 from jax.experimental import optimizers
 from jax import value_and_grad, grad
 from jax import jit, vmap

@@ -1,9 +1,12 @@
 from __future__ import absolute_import
-import set_path
 from optimizers import optimizers
 import sys
 from jax import numpy as jnp
 from utils import Progbar
+from layers import convolutional as cl
+from layers import core
+
+
 
 class Model:
     '''
@@ -11,15 +14,25 @@ class Model:
     input_layer: takes the input layer
     output_layer: takes the output layer
     '''
-    def __init__(self, input_layer, output_layer, name=None):
+    def __init__(self, input_layer=None, output_layer=None, name=None, key=None):
         self.input_layer = input_layer
         self.output_layer = output_layer
         self.name = name if name is not None else self.__class__.__name__
-        self.get_layers_and_params()
-        self.layers = self.layers[::-1]
-        self.trainable_params = self.trainable_params[::-1]
+        #Aliases
         self.predict = self.__call__
         self.predict_with_external_weights = self.call_with_external_weights
+        #list to store the layers
+        self.layers = []
+        #list to store the parameters
+        self.trainable_params = []
+
+        self.built = False
+
+        if not isinstance(self, Sequential):
+            if input_layer is None and output_layer is None:
+                raise Exception('the model should has input_layer and output_layer')
+            self.get_layers_and_params()
+
  
     
     def get_layers_and_params(self):
@@ -28,19 +41,17 @@ class Model:
         #temporary variable to loop over the layers
         pointer = self.output_layer
 
-        #list to store the layers
-        self.layers = []
-
-        #list to store the parameters
-        self.trainable_params = []
-
         #looping over the layers
         while hasattr(pointer, 'prev'):
             self.layers.append(pointer)
             self.trainable_params.append(pointer.get_weights())
             pointer = pointer.prev
+        self.layers = self.layers[::-1]
+        self.trainable_params = self.trainable_params[::-1]
+        self.built=True
+        
 
-    def compile(self, loss, optimizer, metrics=['Loss', 'Remaining epochs']):
+    def compile(self, loss, optimizer, metrics=['loss', 'remaining epochs']):
         'Takes the loss, optimizer and loss recorder state'
         self.loss_fn = loss
         self.optimizer = optimizers.get(optimizer)
@@ -66,6 +77,9 @@ class Model:
         for i, layer in enumerate(self.layers):
             x = layer.call_with_external_weights(x, params[i])
         return x
+
+    def get_weights(self):
+        return self.trainable_params
 
     def set_weights(self, weights):
         'Set new weights on every layer'
@@ -93,11 +107,8 @@ class Model:
         self.input_layer.store_data(x, y, validation_data=validation_data)
 
         if validation_data is not None:
-            self.metrics += ['Validation loss']
-        
+            self.metrics += ['validation loss']
         prgbar = Progbar(self.input_layer.num_batches, stateful_metrics=self.metrics)
-
-
         for epoch in range(epochs):
             finished_batches = 0
             #gets a batch and pass it to the model
@@ -106,17 +117,53 @@ class Model:
                 loss = self.train_step(batch_x, batch_y, validation_data=validation_data)                
                 values = None
                 if isinstance(loss, tuple):
-                    values = [('Remaining epochs', epochs-epoch), ('Loss', loss[0]), ('Validation loss', loss[1])]
+                    values = [('remaining epochs', epochs-epoch), ('loss', loss[0]), ('validation loss', loss[1])]
                 else:
-                    values = [('Remaining epochs', epochs-epoch), ('Loss', loss)]
+                    values = [('remaining epochs', epochs-epoch), ('loss', loss)]
                 finished_batches += 1
                 prgbar.update(finished_batches, values=values)
-
-            if validation_data is not None:
-                print(f"Training loss: {jnp.mean(epoch_training_loss)}, Validation loss: {jnp.mean(epoch_validation_loss)}")
-            else:
-                print(f"Training loss: {epoch_training_loss}")
                 
+
+
+
+class Sequential(Model):
+    def __init__(self, layers=None):
+        super(Sequential, self).__init__()
+        if layers is not None:
+            connected_layers = self.connect_layers(layers)
+            self.input_layer = connected_layers[0]
+            self.output_layer = connected_layers[-1]
+            self.get_layers_and_params()
+        else:
+            self.temporary_layers_list = []
+
+    def connect_layers(self, layers):
+        for i, layer in enumerate(reversed(layers)):
+            if hasattr(layer, 'prev'):
+                layer.connect(layers[len(layers)-2-i])
+                layers[i](layers[i-1])
+                layers[i+1](layers[i])
+        return layers
+    
+    def add(self, layer):
+        if isinstance(layer, core.Input) or isinstance(layer, core.Layer):
+            self.temporary_layers_list.append(layer)
+        else:
+            raise Exception('add() only accepts layers subclass instances or Input instance')
+    
+    def compile(self, loss, optimizer, metrics=['loss', 'remaining epochs']):
+        self.loss_fn = loss
+        self.optimizer = optimizers.get(optimizer)
+        self.metrics = metrics
+
+        if not self.built:
+            connected_layers = self.connect_layers(self.temporary_layers_list)
+            self.input_layer = connected_layers[0]
+            self.output_layer = connected_layers[-1]
+            self.get_layers_and_params()
+            self.temporary_layers_list = None
             
+        if isinstance(optimizer, str):
+            self.configure_optimizer()
 
-
+    
