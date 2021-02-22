@@ -1,5 +1,6 @@
-# kerax
-Deep Learning Library based on JAX and Inspired from Keras
+# Kerax
+
+Deep Learning library based on JAX and inspired from Keras
 
 
-###TODO: Adding more layers, commenting the code
+### Currently It's not fully ready, so there is no setup.py file
