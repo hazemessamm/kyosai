@@ -24,7 +24,6 @@ import numpy as np
 from jax import numpy as jnp
 from optimizers import optimizers
 from utils import to_categorical
-from jax.scipy.special import logsumexp
 from jax import nn
 
 from tensorflow.keras.datasets import mnist
