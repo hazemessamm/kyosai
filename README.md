@@ -51,8 +51,6 @@ model = models.Model(inputs, output)
 def loss(params, x, y):
     preds = model.call_with_external_weights(x, params)
     return jnp.mean(-jnp.log(preds[y]))
-    
-adam = optimizers.Adam(loss_fn=loss, model=model)
 
 model.compile(loss=loss, optimizer='adam')
 
