@@ -9,12 +9,12 @@ from optimizers import optimizers
 from utils import to_categorical
 from jax.scipy.special import logsumexp
 from jax import nn
-
+from jax import random
 
 
 ###Testing
 inputs = core.Input((64,28,28,1))
-conv1 = c.Conv2D(128,3, activation='relu')(inputs)
+conv1 = c.Conv2D(64,3, activation='relu', key=random.PRNGKey(1003))(inputs)
 conv2 = c.Conv2D(64,3, activation='relu')(conv1)
 flatten = core.Flatten()(conv2)
 dense = core.Dense(512, activation='relu')(flatten)
@@ -22,13 +22,17 @@ output = core.Dense(10, activation='softmax')(dense)
 
 model = models.Model(inputs, output)
 
-def loss(params, x, y):
+def loss(model):
+    def loss_fn(params, x, y):
+        preds = model.call_with_external_weights(x, params)
+        return jnp.mean(-jnp.log(preds[y]))
+    return loss_fn
+
+def loss_v2(params, x, y):
     preds = model.call_with_external_weights(x, params)
     return jnp.mean(-jnp.log(preds[y]))
 
-adam = optimizers.Adam(loss_fn=loss, model=model)
-
-model.compile(loss=loss, optimizer='adam')
+model.compile(loss=loss_v2, optimizer='adam')
 
 
 
@@ -64,7 +68,7 @@ def loss(params, x, y):
 
 
 layers = [core.Input((28, 28, 1)), cl.Conv2D(3,3), cl.Conv2D(3,3), core.Flatten()]
-model = Sequential()
+model = models.Sequential()
 model.add(core.Input((28,28,1)))
 model.add(cl.Conv2D(3,3))
 model.add(cl.Conv2D(3,3))

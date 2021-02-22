@@ -20,6 +20,7 @@ class Optimizer:
         self.model = model
         self.step_index = 0
 
+
     #this function should be implemented by the subclasses
     def apply_grads(self, grads):
         raise NotImplementedError

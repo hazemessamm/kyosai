@@ -5,6 +5,7 @@ from jax import numpy as jnp
 from utils import Progbar
 from layers import convolutional as cl
 from layers import core
+import losses
 
 
 
@@ -14,7 +15,7 @@ class Model:
     input_layer: takes the input layer
     output_layer: takes the output layer
     '''
-    def __init__(self, input_layer=None, output_layer=None, name=None, key=None):
+    def __init__(self, input_layer=None, output_layer=None, name=None):
         self.input_layer = input_layer
         self.output_layer = output_layer
         self.name = name if name is not None else self.__class__.__name__
@@ -27,6 +28,7 @@ class Model:
         self.trainable_params = []
 
         self.built = False
+
 
         if not isinstance(self, Sequential):
             if input_layer is None and output_layer is None:
@@ -53,13 +55,14 @@ class Model:
 
     def compile(self, loss, optimizer, metrics=['loss', 'remaining epochs']):
         'Takes the loss, optimizer and loss recorder state'
-        self.loss_fn = loss
+        self.loss_fn = losses.get(loss)
         self.optimizer = optimizers.get(optimizer)
         self.metrics = metrics
 
         #if optimizer is string then it needs configuration
         if isinstance(optimizer, str):
             self.configure_optimizer()
+
     
     def configure_optimizer(self):
         'Configure the optimizer'
@@ -165,3 +168,29 @@ class Sequential(Model):
             
         if isinstance(optimizer, str):
             self.configure_optimizer()
+
+
+'''
+from jax import random
+inputs = core.Input((64,28,28,1))
+conv1 = cl.Conv2D(128,3, activation='relu', key=random.PRNGKey(1003))(inputs)
+conv2 = cl.Conv2D(64,3, activation='relu', key=random.PRNGKey(1003))(conv1)
+flatten = core.Flatten()(conv2)
+dense = core.Dense(512, activation='relu', key=random.PRNGKey(1003))(flatten)
+output = core.Dense(10, activation='softmax', key=random.PRNGKey(1003))(dense)
+
+model = Model(inputs, output)
+
+import numpy as np
+
+x = np.random.random((64, 28,28,1))
+y = [np.random.randint(11) for i in range(64)]
+import utils 
+
+y = np.array(y)
+
+y = utils.to_categorical(y)
+
+model.compile(loss='categorical_crossentropy', optimizer='adam')
+model.fit(x, y)
+'''
