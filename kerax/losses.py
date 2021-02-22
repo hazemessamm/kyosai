@@ -8,11 +8,19 @@ def CategoricalCrossEntropy(model, epsilon=1e7):
     return _CategoricalCrossEntropy
     
 
-def MeanSquaredError(params, x, y):
-    pass
+def MeanSquaredError(model):
+    def _MeanSquaredError(params, x, y):
+        y_pred = model.call_with_external_weights(x, params)
+        return jnp.mean(jnp.power(y_pred-y, 2))
+    return _MeanSquaredError
+        
 
-def MeanAbsoluteError(params, x, y):
-    pass
+def MeanAbsoluteError(model):
+    def _MeanAbsoluteError(params, x, y):
+        y_pred = model.call_with_external_weights(x, params)
+        return jnp.mean(jnp.abs(y_pred-y))
+    return _MeanAbsoluteError
+    
 
 def NegativeLogLikelihood(model, epsilon=1e7):
     def _NegativeLogLikelihood(params, x, y):
@@ -43,7 +51,11 @@ def BinaryCrossEntropy(model, epsilon=1e7):
 losses_dict = {
     'binary_crossentropy': BinaryCrossEntropy,
     'negative_log_likelihood': NegativeLogLikelihood,
-    'categorical_crossentropy': CategoricalCrossEntropy
+    'categorical_crossentropy': CategoricalCrossEntropy,
+    'mse': MeanSquaredError,
+    'mean_squared_error': MeanSquaredError,
+    'mae': MeanAbsoluteError,
+    'mean_absolute_error': MeanAbsoluteError
 }
 
 def get(identifier):
