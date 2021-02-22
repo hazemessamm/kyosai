@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-import set_path
+#import set_path
 from layers import core
 import models
 from layers import convolutional as c
@@ -41,8 +41,6 @@ x_test = x_test.astype('float32')
 x_test = np.expand_dims(x_test, -1)
 y_train = y_train.astype('float32')
 
-
-
 y_train = to_categorical(y_train, 10)
 
 sample = x_test[0]
@@ -51,7 +49,5 @@ sample_y = y_test[0]
 
 
 model.fit(x_train, y_train, epochs=40, batch_size=64, validation_data=(x_test, y_test))
-
-
 
 print(jnp.argmax(model(sample_x)))
