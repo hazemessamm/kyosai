@@ -15,17 +15,17 @@ Deep Learning library based on JAX and inspired from Keras
 ---
 
 Example:
-
-`from layers import core \n`
-`import models`
-`from layers import convolutional as c`
+```python
+from layers import core
+import models
+from layers import convolutional as c
 import numpy as np
 from jax import numpy as jnp
 from optimizers import optimizers
 from utils import to_categorical
 from jax.scipy.special import logsumexp
 from jax import nn
-
+```
 ---
 
 
