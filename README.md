@@ -14,7 +14,9 @@ Deep Learning library based on JAX and inspired from Keras
 
 ---
 
-from layers import core\n
+Example:
+
+from layers import core
 import models
 from layers import convolutional as c
 import numpy as np
