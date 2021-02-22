@@ -3,9 +3,13 @@
 Deep Learning library based on JAX and inspired from Keras
 
 
-> Example
+
 ---
-print("Testing readme format")
+> Task List
+- [ ] Add more layers
+- [ ] Add documentation
+- [ ] Add loss functions
+- [ ] Add more optimizers 
 ---
 
 
