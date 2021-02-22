@@ -208,7 +208,7 @@ class MaxPool2D(core.Layer):
                     raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
                 else:
                     out = self.apply_fn(inputs=inputs, params=self.params)
-                    return self.activation(out) if self.activation is not None else out
+                    return out
     def __repr__(self):
         if self.built:
             return f"<MaxPool Layer with input shape {self.input_shape} and output shape {self.shape}>"

@@ -13,7 +13,7 @@ def MeanSquaredError(model):
         y_pred = model.call_with_external_weights(x, params)
         return jnp.mean(jnp.power(y_pred-y, 2))
     return _MeanSquaredError
-        
+    
 
 def MeanAbsoluteError(model):
     def _MeanAbsoluteError(params, x, y):
