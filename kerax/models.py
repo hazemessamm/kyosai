@@ -165,5 +165,3 @@ class Sequential(Model):
             
         if isinstance(optimizer, str):
             self.configure_optimizer()
-
-    
