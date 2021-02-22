@@ -4,6 +4,9 @@ Deep Learning library based on JAX and inspired from Keras
 
 
 > Example
+---
+print("Testing readme format")
+---
 
 
 
