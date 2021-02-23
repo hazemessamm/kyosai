@@ -129,7 +129,7 @@ class Layer:
         #finally stores the new weights
         for current_p, new_p in zip(self.params, new_weights):
             if current_p.shape != new_p.shape:
-                raise Exception(f"New weights is not compatible with the current weight shapes, {current_p.shape} != {new_p.shape}")
+                raise Exception(f"New weights are not compatible with the current weight shapes, {current_p.shape} != {new_p.shape}")
         
         self.params = new_weights
 
