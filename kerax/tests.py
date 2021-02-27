@@ -4,7 +4,7 @@ import models
 from layers import convolutional as c
 import numpy as np
 from jax import numpy as jnp
-from optimizers import optimizers
+import optimizers
 from utils import to_categorical
 from jax import nn
 from jax import random

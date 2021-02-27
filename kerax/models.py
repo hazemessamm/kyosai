@@ -1,10 +1,9 @@
 from __future__ import absolute_import
-from optimizers import optimizers
+import optimizers
 import sys
 from jax import numpy as jnp
 from utils import Progbar
-from layers import convolutional as cl
-from layers import core
+import layers
 import losses
 
 
