@@ -35,8 +35,6 @@ def Huber(params, x, y):
 def CosineSimilarity(params, x, y):
     pass
 
-def DummyLossForTesting(params, x, y):
-    pass
 
 def BinaryCrossEntropy(model, epsilon=1e7):
     def _BinaryCrossEntropy(params, x, y):

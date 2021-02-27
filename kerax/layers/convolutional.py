@@ -4,12 +4,11 @@ from jax import numpy as jnp
 from jax import jit
 from jax.nn.initializers import normal
 from jax.random import PRNGKey
-from layers import core
 import numpy as np
+from layers import Layer, Input
 
 
-
-class Conv2D(core.Layer):
+class Conv2D(Layer):
 
     '''
 
@@ -112,7 +111,7 @@ class Conv2D(core.Layer):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
         else:
             #here it takes the previous layer to build the current layer
-            if isinstance(inputs, core.Layer) or isinstance(inputs, core.Input):
+            if isinstance(inputs, Layer) or isinstance(inputs, Input):
                 self.build(inputs.shape)
                 #General function used to connect with the previous layer
                 self.connect(inputs)
@@ -135,7 +134,7 @@ class Conv2D(core.Layer):
         else:
             return "<Convolutional Layer>"
 
-class MaxPool2D(core.Layer):
+class MaxPool2D(Layer):
 
 
     '''
@@ -198,7 +197,7 @@ class MaxPool2D(core.Layer):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
         else:
-            if isinstance(inputs, core.Layer) or isinstance(inputs, core.Input):
+            if isinstance(inputs, layers.Layer) or isinstance(inputs, layers.Input):
                 self.build(inputs.shape)
                 self.connect(inputs)
                 return self

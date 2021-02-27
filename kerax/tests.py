@@ -1,24 +1,22 @@
 from __future__ import absolute_import
-#import set_path
-from layers import core
+import layers
 import models
 from layers import convolutional as c
 import numpy as np
 from jax import numpy as jnp
 from optimizers import optimizers
 from utils import to_categorical
-from jax.scipy.special import logsumexp
 from jax import nn
 from jax import random
 
 
 ###Testing
-inputs = core.Input((64,28,28,1))
-conv1 = c.Conv2D(64,3, activation='relu', key=random.PRNGKey(1003))(inputs)
-conv2 = c.Conv2D(64,3, activation='relu')(conv1)
-flatten = core.Flatten()(conv2)
-dense = core.Dense(512, activation='relu')(flatten)
-output = core.Dense(10, activation='softmax')(dense)
+inputs = layers.Input((64,28,28,1))
+conv1 = layers.Conv2D(64,3, activation='relu', key=random.PRNGKey(1003))(inputs)
+conv2 = layers.Conv2D(64,3, activation='relu')(conv1)
+flatten = layers.Flatten()(conv2)
+dense = layers.Dense(512, activation='relu')(flatten)
+output = layers.Dense(10, activation='softmax')(dense)
 
 model = models.Model(inputs, output)
 

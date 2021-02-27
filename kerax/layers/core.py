@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-from initializers import initializers
+import initializers
 from activations import activations
 from jax import numpy as jnp
 from jax import jit
