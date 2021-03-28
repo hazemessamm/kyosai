@@ -17,9 +17,8 @@ Deep Learning library based on JAX and inspired from Keras
 > Example:
 
 ```python
-from layers import core
 import models
-from layers import convolutional as c
+import layers
 import numpy as np
 from jax import numpy as jnp
 from optimizers import optimizers
@@ -40,11 +39,11 @@ y_train = to_categorical(y_train, 10)
 
 
 inputs = core.Input((28,28,1))
-conv1 = c.Conv2D(128,3, activation='relu')(inputs)
-conv2 = c.Conv2D(64,3, activation='relu')(conv1)
-flatten = core.Flatten()(conv2)
-dense = core.Dense(512, activation='relu')(flatten)
-output = core.Dense(10, activation='softmax')(dense)
+conv1 = layers.Conv2D(128,3, activation='relu')(inputs)
+conv2 = layers.Conv2D(64,3, activation='relu')(conv1)
+flatten = layers.Flatten()(conv2)
+dense = layers.Dense(512, activation='relu')(flatten)
+output = layers.Dense(10, activation='softmax')(dense)
 
 model = models.Model(inputs, output)
 
