@@ -39,8 +39,8 @@ y_train = to_categorical(y_train, 10)
 
 
 inputs = core.Input((28,28,1))
-conv1 = layers.Conv2D(128,3, activation='relu')(inputs)
-conv2 = layers.Conv2D(64,3, activation='relu')(conv1)
+conv1 = layers.Conv2D(64,3, activation='relu')(inputs)
+conv2 = layers.Conv2D(128,3, activation='relu')(conv1)
 flatten = layers.Flatten()(conv2)
 dense = layers.Dense(512, activation='relu')(flatten)
 output = layers.Dense(10, activation='softmax')(dense)
