@@ -5,6 +5,7 @@ import optimizers
 from utils import to_categorical
 from jax import random
 import losses
+import models
 
 ###Testing
 inputs = layers.Input((64,28,28,1))

@@ -65,15 +65,16 @@ class Huber(Loss):
         half * jnp.square(error), self.delta *abs_error -half * jnp.square(self.delta)), axis=-1)
 
 
-def BinaryCrossEntropy(model, epsilon=1e7):
-    def _BinaryCrossEntropy(params, x, y):
-        y_pred = model.call_with_external_weights(x, params)
-        lhs = y * jnp.log(y_pred  * epsilon)
-        rhs = (1 - y) * jnp.log(1-y_pred+epsilon)
-        return -jnp.mean(lhs + rhs)
-    return _BinaryCrossEntropy
+class BinaryCrossEntropy(Loss):
+    def __init__(self, model, reduction=None, name='binary_crossentropy'):
+        super(BinaryCrossEntropy, self).__init__(model, reduction, name)
     
-
+    def call(self, params, x, y):
+        y_pred = self.model.call_with_external_weights(x, params)
+        lhs = y * jnp.log(y_pred  * self.epsilon)
+        rhs = (1 - y) * jnp.log(1-y_pred+self.epsilon)
+        return -jnp.mean(lhs + rhs)
+    
 
 supported_losses = {
     'binary_crossentropy': BinaryCrossEntropy,
