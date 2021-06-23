@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 import optimizers
-import sys
 from jax import numpy as jnp
 from utils import Progbar
 import layers
@@ -14,45 +13,47 @@ class Model:
     input_layer: takes the input layer
     output_layer: takes the output layer
     '''
-    def __init__(self, input_layer=None, output_layer=None, name=None):
-        self.input_layer = input_layer
-        self.output_layer = output_layer
-        self.name = name if name is not None else self.__class__.__name__
+    supported_kwargs = {
+            'input',
+            'output',
+            'inputs',
+            'outputs',
+            'name',
+            'trainable'
+        }
+    def __init__(self, *args, **kwargs):
+        self.input = kwargs.get('input')
+        self.output = kwargs.get('output')
+        self.name = kwargs.get('name', self.__class__.__name__)
         #Aliases
         self.predict = self.__call__
         self.predict_with_external_weights = self.call_with_external_weights
         #list to store the layers
         self.layers = []
         #list to store the parameters
-        self.trainable_params = []
-
+        self.params = []
         self.built = False
+        self.trainable = kwargs.get('trainable', True)
+        self.training_phase = False
+        self.compiled = False
 
-
-        if not isinstance(self, Sequential):
-            if input_layer is None and output_layer is None:
-                raise Exception('the model should has input_layer and output_layer')
-            self.get_layers_and_params()
-
- 
+        self.initialize_graph()
     
-    def get_layers_and_params(self):
+    def initialize_graph(self):
         'Stores the layers and paramters'
 
         #temporary variable to loop over the layers
-        pointer = self.output_layer
+        pointer = self.output
 
         #looping over the layers
         while hasattr(pointer, 'prev'):
-            self.layers.append(pointer)
-            self.trainable_params.append(pointer.get_weights())
+            self.layers.insert(0, pointer)
+            self.params.insert(0, pointer.get_weights())
             pointer = pointer.prev
-        self.layers = self.layers[::-1]
-        self.trainable_params = self.trainable_params[::-1]
-        self.built=True
+        self.built = True
         
 
-    def compile(self, loss, optimizer, metrics=['loss', 'remaining epochs']):
+    def compile(self, loss, optimizer, metrics=['loss']):
         'Takes the loss, optimizer and loss recorder state'
         self.loss_fn = losses.get(loss)
         self.optimizer = optimizers.get(optimizer)
@@ -60,34 +61,32 @@ class Model:
 
         #if optimizer is string then it needs configuration
         if isinstance(optimizer, str):
-            self.configure_optimizer()
+            self._configure_optimizer()
+        self.compiled = True
 
     
-    def configure_optimizer(self):
+    def _configure_optimizer(self):
         'Configure the optimizer'
         self.optimizer = self.optimizer(loss_fn=self.loss_fn, model=self)
 
-    def __call__(self, x):
+    def __call__(self, x, training=False):
         'Takes inputs and returns predictions'
-        output = x
-        for layer in self.layers:
-            output = layer(output)
-        return output
+        return self.call_with_external_weights(x, self.params)
 
-    def call_with_external_weights(self, x, params):
+    def call_with_external_weights(self, x, params, training=False):
         'Takes inputs and params and returns predictions'
         for i, layer in enumerate(self.layers):
-            x = layer.call_with_external_weights(x, params[i])
+            x = layer.call(x, params[i])
         return x
 
     def get_weights(self):
-        return self.trainable_params
+        return self.params
 
     def set_weights(self, weights):
         'Set new weights on every layer'
         for layer, w in zip(self.layers, weights):
             layer.set_weights(w)
-        self.trainable_params = weights
+        self.params = weights
 
     def train_step(self, x, y, **kwargs):
         'Returns loss value and takes training batch'
@@ -100,22 +99,22 @@ class Model:
 
     def fit(self, x, y, epochs=1, batch_size=1, validation_data=None):
         #if the model is not compiled then it will raise exception
-        if not hasattr(self, 'loss_fn') or not hasattr(self, 'optimizer'):
-            raise Exception(f'Model is not compiled, found loss={None} and optimizer={None}')
+        if not self.compiled:
+            raise Exception(f'Model is not compiled, use compile() method')
         
         #sets the batch size
-        self.input_layer.set_batch_size(batch_size)
+        self.input.set_batch_size(batch_size)
         #stores the data to the input layer and validation data if there is validation data
-        self.input_layer.store_data(x, y, validation_data=validation_data)
+        self.input.store_data(x, y, validation_data=validation_data)
 
         if validation_data is not None:
             self.metrics += ['validation loss']
-        prgbar = Progbar(self.input_layer.num_batches, stateful_metrics=self.metrics)
+        prgbar = Progbar(self.input.num_batches, stateful_metrics=self.metrics)
         for epoch in range(epochs):
             finished_batches = 0
             #gets a batch and pass it to the model
-            for _ in range(self.input_layer.num_batches):
-                batch_x, batch_y = self.input_layer.get_training_batch()
+            for _ in range(self.input.num_batches):
+                batch_x, batch_y = self.input.get_training_batch()
                 loss = self.train_step(batch_x, batch_y, validation_data=validation_data)                
                 values = None
                 if isinstance(loss, tuple):
@@ -128,9 +127,8 @@ class Model:
 
 
 
-class Sequential(Model):
+class Sequential:
     def __init__(self, layers=None):
-        super(Sequential, self).__init__()
         if layers is not None:
             connected_layers = self.connect_layers(layers)
             self.input_layer = connected_layers[0]

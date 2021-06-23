@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-import set_path
 from jax.nn import initializers
 
 

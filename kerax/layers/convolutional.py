@@ -44,24 +44,27 @@ class Conv2D(Layer):
     def __init__(self, filters, kernel_size, 
                  strides=(1,1), padding='valid', activation=None, 
                  kernel_initializer='glorot_uniform', bias_initializer='normal', 
-                 key=PRNGKey(100), input_dim_order="NHWC", kernel_dim_order="HWIO", output_dim_order="NHWC"):
-        super(Conv2D, self).__init__()
+                 key=PRNGKey(100), input_dim_order="NHWC", 
+                 kernel_dim_order="HWIO", output_dim_order="NHWC", 
+                 trainable=True, 
+                 name=None):
+        super(Conv2D, self).__init__(trainable=trainable, name=name)
         self.filters = filters
         self.kernel_size = kernel_size
         self.strides = strides
         self.padding = padding
         self.activation = self.get_activation(activation)
-        self.check_kernel_size(kernel_size)
-        self.check_strides(strides)
         self.kernel_initializer = self.get_initializer(kernel_initializer)
         self.bias_initializer = self.get_initializer(bias_initializer)
         self.built = False
         self.dimension_numbers = (input_dim_order, kernel_dim_order, output_dim_order)
         self.key = key
+        self.validate_init()
+
         self.init_fn, self.apply_fn = stax.GeneralConv(dimension_numbers=self.dimension_numbers, 
         filter_shape=self.kernel_size, padding=padding, out_chan=filters, W_init=self.kernel_initializer, b_init=self.bias_initializer)
-        self.apply_fn = jit(self.apply_fn)
-        self.predict_with_external_weights = self.call_with_external_weights
+        #self.apply_fn = jit(self.apply_fn)
+        self.predict = self.call
 
 
     def get_kernel_shape(self):
@@ -71,20 +74,17 @@ class Conv2D(Layer):
     def get_bias_shape(self):
         'Returns the bias dimensions'
         return self.bias_shape
-    
-    def check_kernel_size(self, kernel_size):
-        'Checks for the kernel size because it can be int or tuple of size one but JAX accepts only tuple'
-        if isinstance(kernel_size, int):
-            self.kernel_size = (kernel_size, kernel_size)
-        elif isinstance(kernel_size, tuple) and len(kernel_size) == 1:
-            self.kernel_size += kernel_size
-            
-    def check_strides(self, strides):
-        'Checks for the strides because it can be int or tuple of size one but JAX accepts only tuple'
-        if isinstance(strides, int):
-            self.strides = (strides, strides)
-        elif isinstance(strides, tuple) and len(strides) == 1:
-            self.strides += strides
+
+    def validate_init(self):
+        if isinstance(self.strides, int):
+            self.strides = (self.strides, self.strides)
+        elif isinstance(self.strides, tuple) and len(self.strides) == 1:
+            self.strides += self.strides
+
+        if isinstance(self.kernel_size, int):
+            self.kernel_size = (self.kernel_size, self.kernel_size)
+        elif isinstance(self.kernel_size, tuple) and len(self.kernel_size) == 1:
+            self.kernel_size += self.kernel_size
 
     def build(self, input_shape):
         'Initializes the Kernel and stores the Conv2D weights'
@@ -100,10 +100,12 @@ class Conv2D(Layer):
         self.bias_shape = self.params[1].shape
         self.built = True
 
-    def call_with_external_weights(self, inputs, params):
+    def call(self, inputs, params):
         'Used during training to pass the parameters while getting the gradients'
         out = self.apply_fn(inputs=inputs, params=params)
-        return self.activation(out) if self.activation is not None else out
+        if self.activation is not None:
+            return self.activation(out)
+        return out
 
     
     def __call__(self, inputs):
@@ -125,8 +127,7 @@ class Conv2D(Layer):
                 if self.input_shape[1:] != inputs.shape[1:]:
                     raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
                 else:
-                    out = self.apply_fn(inputs=inputs, params=self.params)
-                    return self.activation(out) if self.activation is not None else out
+                    return self.call(inputs, self.params)
 
     def __repr__(self):
         if self.built:

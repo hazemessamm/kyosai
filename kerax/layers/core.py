@@ -98,12 +98,17 @@ class Input:
         return "<Input Layer>"
 
 class Layer:
-    def __init__(self):
+    def __init__(self, trainable=True, name=None):
         #stores the layer params
         self.params = ()
         #stores the previous layer
         self.prev = None
         self.built=False
+        self.trainable = trainable
+        if name is None:
+            self.name = self.__class__.__name__
+        else:
+            self.name = name
 
     def get_initializer(self, identifier):
         'Returns the specified initializer'
@@ -132,6 +137,10 @@ class Layer:
                 raise Exception(f"New weights are not compatible with the current weight shapes, {current_p.shape} != {new_p.shape}")
         
         self.params = new_weights
+    
+    def update_weights(self, new_weights):
+        if self.trainable:
+            self.set_weights(new_weights)
 
 
 class Dense(Layer):
@@ -147,15 +156,15 @@ class Dense(Layer):
 
     '''
     def __init__(self, units, activation=None, kernel_initializer='glorot_normal', bias_initializer='normal', 
-    input_shape=None, key=PRNGKey(100)):
-        super(Dense, self).__init__()
+    input_shape=None, trainable=True, key=PRNGKey(100)):
+        super(Dense, self).__init__(trainable=trainable)
         self.units = units
         self.activation = self.get_activation(activation)
         self.kernel_initializer = self.get_initializer(kernel_initializer)
         self.bias_initializer = self.get_initializer(bias_initializer)
         self.key = key
         self.init_fn, self.apply_fn = stax.Dense(units, W_init=self.kernel_initializer, b_init=self.bias_initializer)
-        self.apply_fn = jit(self.apply_fn)
+        #self.apply_fn = jit(self.apply_fn)
     
     def get_kernel_shape(self):
         return self.kernel_shape
@@ -176,7 +185,7 @@ class Dense(Layer):
         self.bias_shape = self.params[0].shape
         self.built = True
 
-    def call_with_external_weights(self, inputs, params):
+    def call(self, inputs, params):
         'Used during training to pass the parameters while getting the gradients'
         out = self.apply_fn(inputs=inputs, params=params)
         return self.activation(out) if self.activation is not None else out
@@ -185,7 +194,7 @@ class Dense(Layer):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
         else:
-            if isinstance(inputs, Layer) or isinstance(inputs, Input):
+            if isinstance(inputs, (Layer, Input)):
                 self.build(inputs.shape)
                 self.connect(inputs)
                 return self
@@ -194,8 +203,8 @@ class Dense(Layer):
                 if self.input_shape != inputs.shape:
                     raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
                 else:
-                    out = self.apply_fn(inputs=inputs, params=self.params)
-                    return self.activation(out) if self.activation is not None else out
+                    out = self.call(inputs, self.params)
+                    return out
 
     def __repr__(self):
         if self.built:
@@ -216,14 +225,14 @@ class Flatten(Layer):
         #returns initialization function and apply function
         self.init_fn, self.apply_fn = stax.Flatten
         self.key = key
-        self.apply_fn = jit(self.apply_fn)
+        #self.apply_fn = jit(self.apply_fn)
 
     def build(self, input_shape):
         self.shape, self.params = self.init_fn(input_shape=input_shape, rng=self.key)
         self.input_shape = input_shape
         self.built = True
 
-    def call_with_external_weights(self, inputs, params):
+    def call(self, inputs, params):
         'Used during training to pass the parameters while getting the gradients'
         out = self.apply_fn(inputs=inputs, params=params)
         return out
@@ -241,8 +250,7 @@ class Flatten(Layer):
                 if self.input_shape != inputs.shape:
                     raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
                 else:
-                    out = self.apply_fn(inputs=inputs, params=self.params)
-                    return out
+                    return self.call(inputs, self.params)
 
     def __repr__(self):
         if self.built:
@@ -258,25 +266,23 @@ class Dropout(Layer):
     training: stores the mode of the layer, accepts boolean
     key: Pseudo Random Generator Key, default PRNGKey(1)
     '''
-    def __init__(self, rate, training=False, key=PRNGKey(1)):
+    def __init__(self, rate, key=PRNGKey(1)):
         self.rate = rate
-        if training:
-            self.mode = 'train'
-        else:
-            self.mode = 'predict'
         self.key = key
-        self.init_fn, self.apply_fn = stax.Dropout(rate=rate, mode=mode)
+        self.init_fn, self.apply_fn = stax.Dropout(rate=rate, mode='train')
     
-    def call_with_external_weights(self, inputs, params):
+    def call(self, inputs, params, training=False):
         'Used during training to pass the parameters while getting the gradients'
-        out = self.apply_fn(inputs=inputs, params=params)
-        return out
+        if training:
+            out = self.apply_fn(inputs=inputs, params=params)
+            return out
+        return inputs
     
     def build(self, input_shape):
         output_shape, self.params = self.init_fn(rng=self.key, input_shape=input_shape)
         self.input_shape = input_shape
-        self.kernel_shape = params[0].shape
-        self.bias_shape = params[0].shape
+        self.kernel_shape = self.params[0].shape
+        self.bias_shape = self.params[-1].shape
         self.built = True
         self.shape = output_shape
 
@@ -284,7 +290,7 @@ class Dropout(Layer):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
         else:
-            if isinstance(inputs, Layer) or isinstance(inputs, Input):
+            if isinstance(inputs, (Layer, Input)):
                 self.build(inputs.shape)
                 self.connect(inputs)
                 return self
@@ -293,8 +299,7 @@ class Dropout(Layer):
                 if self.input_shape != inputs.shape:
                     raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
                 else:
-                    out = self.apply_fn(inputs=inputs, params=self.params)
-                    return out
+                    return self.call(inputs, self.params)
 
 
 class Activation(Layer):
@@ -313,7 +318,7 @@ class Activation(Layer):
         self.shape = self.input_shape
         self.built=True
 
-    def call_with_external_weights(self, inputs, params):
+    def call(self, inputs, params):
         out = self.apply_fn(inputs, params)
         return out
 
@@ -321,7 +326,7 @@ class Activation(Layer):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
         else:
-            if isinstance(inputs, Layer) or isinstance(inputs, Input):
+            if isinstance(inputs, (Layer, Input)):
                 self.build(inputs.shape)
                 self.connect(inputs)
                 return self
@@ -330,9 +335,55 @@ class Activation(Layer):
                 if self.input_shape != inputs.shape:
                     raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
                 else:
-                    out = self.apply_fn(inputs, self.params)
-                    return out
+                    return self.call(inputs, self.params)
 
     def __repr__(self):
         if self.built:
             return f"<{self.identifier} Activation Layer with input shape {self.input_shape} and output shape {self.shape}>"
+
+
+class Concatenate(Layer):
+    def __init__(self, axis=-1, name=None):
+        super(Concatenate, self).__init__(name=name)
+        self.axis = axis
+
+    def call(self, inputs):
+        return jnp.concatenate(inputs, axis=self.axis)
+    
+    def build(self, input_shape):
+        self.params = ()
+        self.shape = input_shape
+        self.built = True
+    
+    def __call__(self, inputs):
+        if not hasattr(inputs, 'shape'):
+            raise Exception("Inputs should be tensors, or use Input layer for configuration")
+        else:
+            if isinstance(inputs, (Layer, Input)):
+                self.build(inputs.shape)
+                self.connect(inputs)
+                return self
+            else:
+                self.build(inputs.shape)
+                if self.input_shape != inputs.shape:
+                    raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
+                else:
+                    return self.call(inputs, self.params)
+
+
+#TODO: Implmenet Add layer and BatchNorm layer
+class Add(Layer):
+    def __init__(self, **kwargs):
+        pass
+
+    def __call__(self, inputs):
+        pass
+
+
+class BatchNormalization(Layer):
+    def __init__(self, axis=-1, name=None):
+        self.axis = axis
+        self.name = name
+        self.init_fun, self.apply_fn = stax.BatchNorm()
+
+            

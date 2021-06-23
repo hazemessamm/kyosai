@@ -1,5 +1,4 @@
 from jax import nn
-import set_path
 from activations import activations
 
 #Construction layer for the activation

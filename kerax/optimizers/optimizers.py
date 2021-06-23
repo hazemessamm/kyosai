@@ -3,6 +3,7 @@ from jax.experimental import optimizers
 from jax import value_and_grad, grad
 from jax import jit, vmap
 
+
 class Optimizer:
     '''
     Optimizer base class
@@ -37,7 +38,7 @@ class Optimizer:
 
     def get_value_and_gradients(self, x, y):
         'Returns the loss value and the gradients'
-        value, grads = value_and_grad(self.loss_fn)(self.model.trainable_params, x, y)
+        value, grads = value_and_grad(self.loss_fn)(self.model.params, x, y)
         return value, grads
 
 
@@ -60,7 +61,7 @@ class SGD(Optimizer):
         #get params takes the optimizer state and returns the params
         self.init_fn, self.update_fn, self.get_params = optimizers.sgd(step_size=learning_rate)
         #declars optimizer state and takes model current trainable params
-        self.optimizer_state = self.init_fn(model.trainable_params)
+        self.optimizer_state = self.init_fn(model.params)
         self.update_fn = jit(self.update_fn)
 
     def apply_grads(self, grads, step=0):
@@ -91,7 +92,7 @@ class Adam(Optimizer):
         self.beta_2 = beta_2
         self.epsilon = epsilon
         self.init_fn, self.update_fn, self.get_params = optimizers.adam(step_size=learning_rate, b1=beta_1, b2=beta_2, eps=epsilon)
-        self.optimizer_state = self.init_fn(model.trainable_params)
+        self.optimizer_state = self.init_fn(model.params)
         self.update_fn = jit(self.update_fn)
 
     def apply_grads(self, grads, step=0):
