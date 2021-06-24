@@ -7,6 +7,10 @@ import losses
 
 
 
+
+
+
+
 class Model:
     '''
     Model class
@@ -88,6 +92,13 @@ class Model:
             layer.set_weights(w)
         self.params = weights
 
+    def update_weights(self, weights):
+        self.params.clear()
+        for layer, w in zip(self.layers, weights):
+                layer.update_weights(w)
+                self.params.append(layer.params)
+
+
     def train_step(self, x, y, **kwargs):
         'Returns loss value and takes training batch'
         training_loss = self.optimizer.step(x, y)
@@ -128,25 +139,33 @@ class Model:
 
 
 class Sequential:
-    def __init__(self, layers=None):
-        if layers is not None:
-            connected_layers = self.connect_layers(layers)
-            self.input_layer = connected_layers[0]
-            self.output_layer = connected_layers[-1]
-            self.get_layers_and_params()
-        else:
-            self.temporary_layers_list = []
+    def __init__(self, layers=None, trainable=True, name=None):
+        self.layers = layers
+        self.trainable = trainable
+        self.name = name
+        self.params = []
+        self.validate_init()
+    
+    def validate_init(self):
+        if self.layers is not None:
+            self.connect_layers()
+        
+        if self.name is None:
+            self.name = self.__class__.__name__ 
 
-    def connect_layers(self, layers):
-        for i, layer in enumerate(reversed(layers)):
-            if hasattr(layer, 'prev'):
-                layer.connect(layers[len(layers)-2-i])
-                layers[i](layers[i-1])
-                layers[i+1](layers[i])
-        return layers
+    def connect_layers(self):
+        current_layer = self.layers[0]
+        for layer in self.layers[1:]:
+            layer(current_layer)
+            
+            if hasattr(current_layer, 'params'):
+                self.params.append(current_layer.params)
+            
+            current_layer = layer
+            
     
     def add(self, layer):
-        if isinstance(layer, core.Input) or isinstance(layer, core.Layer):
+        if isinstance(layer, (layers.Input, layers.Layer)):
             self.temporary_layers_list.append(layer)
         else:
             raise Exception('add() only accepts layers subclass instances or Input instance')
@@ -167,27 +186,16 @@ class Sequential:
             self.configure_optimizer()
 
 
-'''
-from jax import random
-inputs = core.Input((64,28,28,1))
-conv1 = cl.Conv2D(128,3, activation='relu', key=random.PRNGKey(1003))(inputs)
-conv2 = cl.Conv2D(64,3, activation='relu', key=random.PRNGKey(1003))(conv1)
-flatten = core.Flatten()(conv2)
-dense = core.Dense(512, activation='relu', key=random.PRNGKey(1003))(flatten)
-output = core.Dense(10, activation='softmax', key=random.PRNGKey(1003))(dense)
+seq_layers = [
+    layers.Conv2D(3, 3, shape=(100, 100, 3)),
+    layers.Conv2D(4, 3),
+    layers.Flatten(),
+    layers.Dense(256),
+    layers.Dense(64),
+    layers.Dense(10),
+    layers.Activation('softmax')
+]
 
-model = Model(inputs, output)
+model = Sequential(layers=seq_layers)
 
-import numpy as np
-
-x = np.random.random((64, 28,28,1))
-y = [np.random.randint(11) for i in range(64)]
-import utils 
-
-y = np.array(y)
-
-y = utils.to_categorical(y)
-
-model.compile(loss='categorical_crossentropy', optimizer='adam')
-model.fit(x, y)
-'''
+print(model.layers)

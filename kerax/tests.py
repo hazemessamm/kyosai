@@ -13,11 +13,11 @@ conv1 = layers.Conv2D(64,3, activation='relu', key=random.PRNGKey(1003))(inputs)
 conv2 = layers.Conv2D(128,3, activation='relu', key=random.PRNGKey(1005))(conv1)
 flatten = layers.Flatten()(conv2)
 dense = layers.Dense(512, activation='relu', key=random.PRNGKey(1006))(flatten)
-output = layers.Dense(10, activation='softmax', key=random.PRNGKey(1008))(dense)
+dense2 = layers.Dense(10, key=random.PRNGKey(1008))(dense)
+outputs = layers.Activation('softmax')(dense2)
 
-model = models.Model(input=inputs, output=output)
+model = models.Model(input=inputs, output=outputs)
 
-main_params = model.params
 
 model.compile(loss=losses.CategoricalCrossEntropy(model), optimizer='adam')
 

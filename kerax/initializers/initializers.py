@@ -2,14 +2,53 @@ from __future__ import absolute_import
 from jax.nn import initializers
 
 
+
+
 class InitializerNotFoundException(Exception):
     def __repr__(self):
         return 'InitializerNotFoundException'
 
+class Initializer:
+    
+
+    def __call__(self, shape, dtype=None, **kwargs):
+        raise NotImplementedError
+
+    def get_config(self):
+        return {}
 
 
 
-inits = {'zeros': initializers.zeros,'ones': initializers.ones,
+class Zeros(Initializer):
+
+
+    def __call__(self, shape, key, dtype=None):
+        if dtype is None:
+            dtype = 'float32'
+        
+        return initializers.zeros(key=key, shape=shape, dtype=dtype)
+    
+
+
+class Ones(Initializer):
+    def __call__(self, shape, key, dtype=None):
+        if dtype is None:
+            dtype = 'float32'
+        
+        return initializers.ones(key=key, shape=shape, dtype=dtype)
+
+class GlorotUniform(Initializer):
+    def __call__(self, shape, key, dtype=None):
+        if dtype is None:
+            dtype = 'float32'
+        
+        return initializers.glorot_uniform()
+
+
+
+
+
+supported_inits = {'zeros': initializers.zeros,'ones': initializers.ones,
                              'glorot_uniform': initializers.glorot_uniform(), 
                              'glorot_normal': initializers.glorot_normal(), 
                              'he_normal': initializers.he_normal(), 
@@ -27,7 +66,7 @@ def get(identifier):
     if callable(identifier):
         return identifier
     elif isinstance(identifier, str):
-        result = inits.get(identifier, None)
+        result = supported_inits.get(identifier, None)
         if not result:
             raise InitializerNotFoundException('Identifier is not found')
         return result

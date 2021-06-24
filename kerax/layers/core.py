@@ -164,7 +164,7 @@ class Dense(Layer):
         self.bias_initializer = self.get_initializer(bias_initializer)
         self.key = key
         self.init_fn, self.apply_fn = stax.Dense(units, W_init=self.kernel_initializer, b_init=self.bias_initializer)
-        #self.apply_fn = jit(self.apply_fn)
+        self.apply_fn = jit(self.apply_fn)
     
     def get_kernel_shape(self):
         return self.kernel_shape
@@ -225,7 +225,7 @@ class Flatten(Layer):
         #returns initialization function and apply function
         self.init_fn, self.apply_fn = stax.Flatten
         self.key = key
-        #self.apply_fn = jit(self.apply_fn)
+        self.apply_fn = jit(self.apply_fn)
 
     def build(self, input_shape):
         self.shape, self.params = self.init_fn(input_shape=input_shape, rng=self.key)
@@ -270,6 +270,7 @@ class Dropout(Layer):
         self.rate = rate
         self.key = key
         self.init_fn, self.apply_fn = stax.Dropout(rate=rate, mode='train')
+        self.apply_fn = jit(self.apply_fn)
     
     def call(self, inputs, params, training=False):
         'Used during training to pass the parameters while getting the gradients'

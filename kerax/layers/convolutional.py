@@ -47,7 +47,7 @@ class Conv2D(Layer):
                  key=PRNGKey(100), input_dim_order="NHWC", 
                  kernel_dim_order="HWIO", output_dim_order="NHWC", 
                  trainable=True, 
-                 name=None):
+                 name=None, **kwargs):
         super(Conv2D, self).__init__(trainable=trainable, name=name)
         self.filters = filters
         self.kernel_size = kernel_size
@@ -63,8 +63,13 @@ class Conv2D(Layer):
 
         self.init_fn, self.apply_fn = stax.GeneralConv(dimension_numbers=self.dimension_numbers, 
         filter_shape=self.kernel_size, padding=padding, out_chan=filters, W_init=self.kernel_initializer, b_init=self.bias_initializer)
-        #self.apply_fn = jit(self.apply_fn)
+        self.apply_fn = jit(self.apply_fn)
         self.predict = self.call
+        
+        shape = kwargs.pop('shape', False)
+        if shape:
+            self.shape = shape
+            self.build(self.shape)
 
 
     def get_kernel_shape(self):
@@ -113,7 +118,7 @@ class Conv2D(Layer):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
         else:
             #here it takes the previous layer to build the current layer
-            if isinstance(inputs, Layer) or isinstance(inputs, Input):
+            if isinstance(inputs, (Layer, Input)):
                 self.build(inputs.shape)
                 #General function used to connect with the previous layer
                 self.connect(inputs)
@@ -166,7 +171,7 @@ class MaxPool2D(Layer):
         self.key = key
         #initializing maxpool
         self.init_fn, self.apply_fn = stax.MaxPool(window_shape=pool_size, padding=padding, strides=strides, spec=spec)
-
+        self.apply_fn = jit(self.apply_fn)
 
 
     def check_pool_size(self, pool_size):

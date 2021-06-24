@@ -97,7 +97,7 @@ class Adam(Optimizer):
 
     def apply_grads(self, grads, step=0):
         self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
-        self.model.set_weights(self.get_params(self.optimizer_state))
+        self.model.update_weights(self.get_params(self.optimizer_state))
 
 
 class Adagrad(Optimizer):

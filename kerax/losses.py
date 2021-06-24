@@ -48,7 +48,7 @@ class MeanAbsoluteError(Loss):
 
     def call(self, params, x, y):
         y_pred = self.model.call_with_external_weights(x, params)
-        return jnp.mean(jnp.abs(y_pred, y))
+        return jnp.mean(jnp.abs(jnp.subtract(y_pred, y)))
     
 
 class Huber(Loss):
