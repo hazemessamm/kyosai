@@ -1,14 +1,10 @@
-from jax import numpy as jnp
-from jax._src.numpy.lax_numpy import cross
+from jax import numpy as jnp #type:ignore
 
 
 class Loss:
     def __init__(self, model, reduction=None, name=None):
         self.reduction = reduction
-        if name is None:
-            self.name = self.__class__.__name__
-        else:
-            self.name = name
+        self.name = self.__class__.__name__ if name is None else name
         self.epsilon = 1e-12
         self.model = model
 
@@ -28,18 +24,17 @@ class CategoricalCrossEntropy(Loss):
         super(CategoricalCrossEntropy, self).__init__(model, reduction, name)
     
     def call(self, params, x, y):
-        y_preds = self.model.call_with_external_weights(x, params)
+        y_preds = self.model.call_with_external_weights(params, x)
         y_preds = jnp.clip(y_preds, self.epsilon, 1. - self.epsilon)
         num_samples = y_preds.shape[0]
-        error = -jnp.sum(y*jnp.log(y_preds+1e-9))/num_samples
-        return error
+        return -jnp.sum(y*jnp.log(y_preds+1e-9))/num_samples
 
 class MeanSquaredError(Loss):
     def __init__(self, model, reduction=None, name='mean_squared_error'):
         super(MeanSquaredError, self).__init__(model, reduction, name)
     
     def call(self, params, x, y):
-        y_pred = self.model.call_with_external_weights(x, params)
+        y_pred = self.model.call_with_external_weights(params, x)
         return jnp.mean(jnp.square(jnp.subtract(y_pred, y)))
     
 class MeanAbsoluteError(Loss):
@@ -47,7 +42,7 @@ class MeanAbsoluteError(Loss):
         super(MeanAbsoluteError, self).__init__(model, reduction, name)
 
     def call(self, params, x, y):
-        y_pred = self.model.call_with_external_weights(x, params)
+        y_pred = self.model.call_with_external_weights(params, x)
         return jnp.mean(jnp.abs(jnp.subtract(y_pred, y)))
     
 
@@ -57,7 +52,7 @@ class Huber(Loss):
         self.delta = delta
     
     def call(self, params, x, y):
-        y_pred = self.model.call_with_external_weights(x, params)
+        y_pred = self.model.call_with_external_weights(params, x)
         error = jnp.subtract(y_pred, y)
         abs_error = jnp.abs(error)
         half = jnp.array(0.5, dtype=abs_error.dtype)
@@ -70,7 +65,7 @@ class BinaryCrossEntropy(Loss):
         super(BinaryCrossEntropy, self).__init__(model, reduction, name)
     
     def call(self, params, x, y):
-        y_pred = self.model.call_with_external_weights(x, params)
+        y_pred = self.model.call_with_external_weights(params, x)
         lhs = y * jnp.log(y_pred  * self.epsilon)
         rhs = (1 - y) * jnp.log(1-y_pred+self.epsilon)
         return -jnp.mean(lhs + rhs)

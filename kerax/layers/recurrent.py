@@ -1,8 +1,5 @@
-from jax import numpy as jnp
+from jax import numpy as jnp #type: ignore
 from layers import Layer, Input
-
-
-
 
 class GRU(Layer):
     def __init__(self, units, activation='tanh', recurrent_activation='sigmoid', 
@@ -23,7 +20,7 @@ class GRU(Layer):
 
 
 class LSTM(Layer):
-    def __init__(self, ):
+    def __init__(self):
         pass
 
 

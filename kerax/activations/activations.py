@@ -1,4 +1,4 @@
-from jax import nn
+from jax import nn #type: ignore
 
 
 

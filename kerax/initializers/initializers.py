@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-from jax.nn import initializers
+from jax.nn import initializers #type: ignore
 
 
 

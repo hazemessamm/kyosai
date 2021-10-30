@@ -1,10 +1,9 @@
 from __future__ import absolute_import
 import optimizers
-from jax import numpy as jnp
-from utils import Progbar
+from jax import numpy as jnp #type: ignore
 import layers
 import losses
-
+from tqdm import tqdm, trange #type: ignore
 
 
 
@@ -59,7 +58,7 @@ class Model:
 
     def compile(self, loss, optimizer, metrics=['loss']):
         'Takes the loss, optimizer and loss recorder state'
-        self.loss_fn = losses.get(loss)
+        self.loss_fn = losses.get(loss)(self)
         self.optimizer = optimizers.get(optimizer)
         self.metrics = metrics
 
@@ -75,12 +74,12 @@ class Model:
 
     def __call__(self, x, training=False):
         'Takes inputs and returns predictions'
-        return self.call_with_external_weights(x, self.params)
+        return self.call_with_external_weights(self.params, x)
 
-    def call_with_external_weights(self, x, params, training=False):
+    def call_with_external_weights(self, params, x, training=False):
         'Takes inputs and params and returns predictions'
-        for i, layer in enumerate(self.layers):
-            x = layer.call(x, params[i])
+        for layer, param in zip(self.layers, params):
+            x = layer.call_with_external_weights(param, x)
         return x
 
     def get_weights(self):
@@ -98,15 +97,17 @@ class Model:
                 layer.update_weights(w)
                 self.params.append(layer.params)
 
-
     def train_step(self, x, y, **kwargs):
         'Returns loss value and takes training batch'
-        training_loss = self.optimizer.step(x, y)
-        if kwargs.get('validation_data', None) is not None:
-            batch_x, batch_y = self.input_layer.get_validation_batch()
-            validation_loss = self.loss_fn(self.trainable_params, batch_x, batch_y)
-            return training_loss, validation_loss
-        return training_loss
+        loss = self.loss_fn(self.params, x, y)
+        grads = self.optimizer.get_gradients(x, y)
+        self.optimizer.apply_gradients(grads)
+        return loss
+
+    def test_step(self, x, y):
+        batch_x, batch_y = self.input.get_validation_batch()
+        return self.loss_fn(self.params, batch_x, batch_y)
+
 
     def fit(self, x, y, epochs=1, batch_size=1, validation_data=None):
         #if the model is not compiled then it will raise exception
@@ -118,24 +119,19 @@ class Model:
         #stores the data to the input layer and validation data if there is validation data
         self.input.store_data(x, y, validation_data=validation_data)
 
-        if validation_data is not None:
-            self.metrics += ['validation loss']
-        prgbar = Progbar(self.input.num_batches, stateful_metrics=self.metrics)
         for epoch in range(epochs):
-            finished_batches = 0
+            remaining_epochs = int(epochs - epoch)
             #gets a batch and pass it to the model
-            for _ in range(self.input.num_batches):
-                batch_x, batch_y = self.input.get_training_batch()
-                loss = self.train_step(batch_x, batch_y, validation_data=validation_data)                
-                values = None
-                if isinstance(loss, tuple):
-                    values = [('remaining epochs', epochs-epoch), ('loss', loss[0]), ('validation loss', loss[1])]
-                else:
-                    values = [('remaining epochs', epochs-epoch), ('loss', loss)]
-                finished_batches += 1
-                prgbar.update(finished_batches, values=values)
-                
-
+            with trange(self.input.num_batches, bar_format='{l_bar}{bar:40}{r_bar}{bar:-20b}') as t:
+                for _ in t:
+                    batch_x, batch_y = self.input.get_training_batch()
+                    train_loss = self.train_step(batch_x, batch_y, validation_data=validation_data)
+                    if validation_data:
+                        validation_loss = self.test_step(validation_data[0], validation_data[1])
+                        t.set_postfix(loss=train_loss, validation_loss=validation_loss, remaining_epochs=remaining_epochs)
+                    else:
+                        t.set_postfix(loss=train_loss, remaining_epochs=remaining_epochs)
+                    t.refresh()
 
 
 class Sequential:
@@ -184,18 +180,3 @@ class Sequential:
             
         if isinstance(optimizer, str):
             self.configure_optimizer()
-
-
-seq_layers = [
-    layers.Conv2D(3, 3, shape=(100, 100, 3)),
-    layers.Conv2D(4, 3),
-    layers.Flatten(),
-    layers.Dense(256),
-    layers.Dense(64),
-    layers.Dense(10),
-    layers.Activation('softmax')
-]
-
-model = Sequential(layers=seq_layers)
-
-print(model.layers)
