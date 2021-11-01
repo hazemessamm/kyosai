@@ -49,9 +49,8 @@ class Conv2D(Layer):
         self.init_fn, self.apply_fn = stax.GeneralConv(dimension_numbers=self.dimension_numbers, 
         filter_shape=self.kernel_size, padding=padding, out_chan=filters, W_init=self.kernel_initializer, b_init=self.bias_initializer)
         self.apply_fn = jit(self.apply_fn)
-        self.predict = self.call
         
-        shape = kwargs.pop('shape', False)
+        shape = kwargs.pop('shape', False) or kwargs.pop('input_shape', False)
         if shape:
             self.build(shape)
 
@@ -94,7 +93,7 @@ class Conv2D(Layer):
         return self.activation(self.output) if self.activation else self.output
 
     def call_with_external_weights(self, params, inputs):
-        self.output = super().call_with_external_weights(params, inputs)
+        self.output =  self.apply_fn(params=params, inputs=inputs)
         return self.activation(self.output) if self.activation is not None else self.output
 
     
@@ -146,7 +145,6 @@ class MaxPool2D(Layer):
         self.init_fn, self.apply_fn = stax.MaxPool(window_shape=pool_size, padding=padding, strides=strides, spec=spec)
         self.apply_fn = jit(self.apply_fn)
 
-
     def validate_init(self):
         if isinstance(self.pool_size, int):
             self.pool_size = (self.pool_size, self.pool_size)
@@ -164,8 +162,13 @@ class MaxPool2D(Layer):
         self.input_shape = input_shape
         self.built = True
 
-    def call(self, params, inputs):
-        self.output = self.apply_fn(params, inputs)
+    def call(self, inputs):
+        self.output = self.apply_fn(self.params, inputs)
+        return self.output
+
+    def call_with_external_weights(self, params, inputs):
+        self.output =  self.apply_fn(params=params, inputs=inputs)
+        print("here", self.output)
         return self.output
 
     def __call__(self, inputs):

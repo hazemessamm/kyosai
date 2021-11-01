@@ -1,5 +1,5 @@
 from jax import nn #type: ignore
-from activations import activations
+from kerax.activations import activations
 from jax import numpy as jnp #type:ignore
 
 #Construction layer for the activation

@@ -1,10 +1,10 @@
-import initializers
-import activations
+from kerax.initializers import initializers
+from kerax import activations
 from jax import numpy as jnp #type: ignore
 from jax import jit #type: ignore
 from jax.experimental import stax #type: ignore
 from jax.random import PRNGKey, split #type: ignore
-from . import construction_layers
+from kerax.layers import construction_layers
 from jaxlib.xla_extension import DeviceArray #type: ignore
 
 
@@ -97,7 +97,7 @@ class Layer:
         #stores the layer params
         self.params = ()
         #stores the previous layer
-        self.prev = None
+        self.prev = []
         self.built = False
         if not isinstance(key, DeviceArray):
             key = PRNGKey(key)
@@ -147,9 +147,6 @@ class Layer:
             raise Exception('This layer does not have an output yet, call method should be called')
         return self.output
 
-    def call_with_external_weights(self, params, inputs):
-        self.output =  self.apply_fn(params=params, inputs=inputs)
-        return self.output
 
 
 class Dense(Layer):
@@ -194,7 +191,7 @@ class Dense(Layer):
         self.built = True
 
     def call_with_external_weights(self, params, inputs):
-        self.output = super().call_with_external_weights(params, inputs)
+        self.output =  self.apply_fn(params=params, inputs=inputs)
         return self.activation(self.output) if self.activation is not None else self.output
 
     def call(self, inputs):
@@ -241,6 +238,10 @@ class Flatten(Layer):
         self.input_shape = input_shape
         self.built = True
 
+    def call_with_external_weights(self, params, inputs):
+        self.output =  self.apply_fn(params=params, inputs=inputs)
+        return self.output
+
     def call(self, inputs):
         'Used during training to pass the parameters while getting the gradients'
         self.output = self.apply_fn(inputs=inputs, params=self.params)
@@ -281,19 +282,24 @@ class Dropout(Layer):
         self.init_fn, self.apply_fn = stax.Dropout(rate=rate, mode='train')
         self.apply_fn = jit(self.apply_fn)
     
-    def call(self, inputs, training=False):
-        'Used during training to pass the parameters while getting the gradients'
-        self.output = inputs
-        if training:
-            self.output = self.apply_fn(inputs=inputs, params=self.params)
-        return self.output
-    
     def build(self, input_shape):
         self.shape, self.params = self.init_fn(rng=self.key, input_shape=input_shape)
         self.input_shape = input_shape
         self.kernel_shape = self.params[0].shape
         self.bias_shape = self.params[-1].shape
         self.built = True
+
+    def call(self, inputs, training=False):
+        'Used during training to pass the parameters while getting the gradients'
+        if training:
+            self.output = self.apply_fn(inputs=inputs, params=self.params)
+        else:
+            self.output = inputs
+        return self.output
+    
+    def call_with_external_weights(self, params, inputs):
+        self.output =  self.apply_fn(params=params, inputs=inputs)
+        return self.output
 
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
@@ -330,6 +336,10 @@ class Activation(Layer):
         self.output = self.apply_fn(self.params, inputs)
         return self.output
 
+    def call_with_external_weights(self, params, inputs):
+        self.output =  self.apply_fn(params=params, inputs=inputs)
+        return self.output
+
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
@@ -355,18 +365,22 @@ class Concatenate(Layer):
         self.axis = axis
         self.layers = layers
 
-    def call(self, inputs):
-        self.output = self.layers[0].get_output()
-        for layer in self.layers[1:]:
-            self.output = jnp.concatenate((self.output, layer.get_output()), axis=self.axis)
-        return self.output
-    
     def build(self, input_shape):
         self.params = ()
         self.shape = input_shape
         self.built = True
         self.input_shape = input_shape
     
+    def call(self, inputs):
+        self.output = self.layers[0].get_output()
+        for layer in self.layers[1:]:
+            self.output = jnp.concatenate((self.output, layer.get_output()), axis=self.axis)
+        return self.output
+
+    def call_with_external_weights(self, params, inputs):
+        self.output =  self.apply_fn(params=params, inputs=inputs)
+        return self.output
+
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
@@ -414,6 +428,9 @@ class Add(Layer):
             self.output = self.apply_fn(self.params, self.output, layer.get_output())
         return self.output
         
+    def call_with_external_weights(self, params, inputs):
+        self.output =  self.apply_fn(params=params, inputs=inputs)
+        return self.output
 
     def __call__(self, inputs, params=None):
         if not hasattr(inputs, 'shape'):
@@ -444,7 +461,11 @@ class BatchNormalization(Layer):
     def call(self, inputs):
         self.output = self.apply_fn(params=self.params, x=inputs)
         return self.output
-    
+
+    def call_with_external_weights(self, params, inputs):
+        self.output =  self.apply_fn(params=params, inputs=inputs)
+        return self.output
+
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")

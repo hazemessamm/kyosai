@@ -1,7 +1,6 @@
-from __future__ import absolute_import
-from jax.nn import initializers #type: ignore
-
-
+from jax.nn import initializers as jax_initializers#type: ignore
+from jaxlib.xla_extension import DeviceArray #type: ignore
+from jax.random import PRNGKey, split #type: ignore
 
 
 class InitializerNotFoundException(Exception):
@@ -9,70 +8,116 @@ class InitializerNotFoundException(Exception):
         return 'InitializerNotFoundException'
 
 class Initializer:
-    
-
     def __call__(self, shape, dtype=None, **kwargs):
         raise NotImplementedError
 
     def get_config(self):
         return {}
 
-
-
 class Zeros(Initializer):
-
-
-    def __call__(self, shape, key, dtype=None):
+    def __call__(self, key, shape, dtype=None):
         if dtype is None:
             dtype = 'float32'
-        
-        return initializers.zeros(key=key, shape=shape, dtype=dtype)
-    
-
+        return jax_initializers.zeros(key=key, shape=shape, dtype=dtype)
 
 class Ones(Initializer):
-    def __call__(self, shape, key, dtype=None):
+    def __call__(self, key, shape, dtype=None):
         if dtype is None:
             dtype = 'float32'
         
-        return initializers.ones(key=key, shape=shape, dtype=dtype)
+        return jax_initializers.ones(key=key, shape=shape, dtype=dtype)
 
 class GlorotUniform(Initializer):
-    def __call__(self, shape, key, dtype=None):
+    def __call__(self, key, shape, dtype=None):
         if dtype is None:
             dtype = 'float32'
-        
-        return initializers.glorot_uniform()
+        initializer_fn = jax_initializers.glorot_uniform()
+        return initializer_fn(key, shape, dtype)
+
+class GlorotNormal(Initializer):
+    def __call__(self, key, shape, dtype=None):
+        if dtype is None:
+            dtype = 'float32'
+        initializer_fn = jax_initializers.glorot_normal()
+        return initializer_fn(key, shape, dtype)
+
+class HeNormal(Initializer):
+    def __call__(self, key, shape, dtype=None):
+        if dtype is None:
+            dtype = 'float32'
+        initializer_fn = jax_initializers.he_normal()
+        return initializer_fn(key, shape, dtype)
+
+class HeUniform(Initializer):
+    def __call__(self, key, shape, dtype=None):
+        if dtype is None:
+            dtype = 'float32'
+        initializer_fn = jax_initializers.he_uniform()
+        return initializer_fn(key, shape, dtype)
+
+
+class KaimingNormal(Initializer):
+    def __call__(self, key, shape, dtype=None):
+        if dtype is None:
+            dtype = 'float32'
+        initializer_fn = jax_initializers.kaiming_normal()
+        return initializer_fn(key, shape, dtype)
+
+class KaimingUniform(Initializer):
+    def __call__(self, key, shape, dtype=None):
+        if dtype is None:
+            dtype = 'float32'
+        initializer_fn = jax_initializers.kaiming_uniform()
+        return initializer_fn(key, shape, dtype)
+
+
+class LecunNormal(Initializer):
+    def __call__(self, key, shape, dtype=None):
+        if dtype is None:
+            dtype = 'float32'
+        initializer_fn = jax_initializers.lecun_normal()
+        return initializer_fn(key, shape, dtype)
+
+class LecunUniform(Initializer):
+    def __call__(self, key, shape, dtype=None):
+        if dtype is None:
+            dtype = 'float32'
+        initializer_fn = jax_initializers.lecun_uniform()
+        return initializer_fn(key, shape, dtype)
+
+
+class Normal(Initializer):
+    def __call__(self, key, shape, dtype=None):
+        if dtype is None:
+            dtype = 'float32'
+        initializer_fn = jax_initializers.normal()
+        return initializer_fn(key, shape, dtype)
 
 
 
-
-
-supported_inits = {'zeros': initializers.zeros,'ones': initializers.ones,
-                             'glorot_uniform': initializers.glorot_uniform(), 
-                             'glorot_normal': initializers.glorot_normal(), 
-                             'he_normal': initializers.he_normal(), 
-                             'he_uniform': initializers.he_uniform(), 
-                            'kaiming_normal': initializers.kaiming_normal(),
-                            'kaiming_uniform': initializers.kaiming_uniform(),
-                            'lecun_normal': initializers.lecun_normal(),
-                            'lecun_uniform': initializers.lecun_uniform(),
-                            'normal': initializers.normal()
+supported_initializations = {'zeros': Zeros(),'ones': Ones(),
+                             'glorot_uniform': GlorotUniform(), 
+                             'glorot_normal': GlorotNormal(), 
+                             'he_normal': HeNormal(), 
+                             'he_uniform': HeUniform(), 
+                            'kaiming_normal': KaimingNormal(),
+                            'kaiming_uniform': KaimingUniform(),
+                            'lecun_normal': LecunNormal(),
+                            'lecun_uniform': LecunUniform(),
+                            'normal': Normal()
                             }
 
 def get(identifier):
+    global supported_initializations
+
     if identifier is None:
         return None
     if callable(identifier):
         return identifier
     elif isinstance(identifier, str):
-        result = supported_inits.get(identifier, None)
+        result = supported_initializations.get(identifier, None)
         if not result:
             raise InitializerNotFoundException('Identifier is not found')
         return result
     else:
         raise Exception('Identifier should be string')
-
-
-def normal(shape, stddev, key):
-    return initializers.normal(stddev)(key=key, shape=shape)

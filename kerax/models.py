@@ -1,15 +1,14 @@
 from __future__ import absolute_import
-import optimizers
+from kerax import optimizers
 from jax import numpy as jnp #type: ignore
-import layers
-import losses
+from kerax import layers
+from kerax import losses
 from tqdm import tqdm, trange #type: ignore
+from collections import deque
+from kerax.engine.trackable import Tracker
 
 
-
-
-
-
+@Tracker.track_model
 class Model:
     '''
     Model class
@@ -32,29 +31,27 @@ class Model:
         self.predict = self.__call__
         self.predict_with_external_weights = self.call_with_external_weights
         #list to store the layers
-        self.layers = []
+        self.layers = deque()
         #list to store the parameters
-        self.params = []
+        self.params = deque()
         self.built = False
         self.trainable = kwargs.get('trainable', True)
         self.training_phase = False
         self.compiled = False
-
         self.initialize_graph()
-    
+
+
     def initialize_graph(self):
         'Stores the layers and paramters'
-
         #temporary variable to loop over the layers
         pointer = self.output
 
         #looping over the layers
         while hasattr(pointer, 'prev'):
-            self.layers.insert(0, pointer)
-            self.params.insert(0, pointer.get_weights())
+            self.layers.appendleft(pointer)
+            self.params.appendleft(pointer.get_weights())
             pointer = pointer.prev
         self.built = True
-        
 
     def compile(self, loss, optimizer, metrics=['loss']):
         'Takes the loss, optimizer and loss recorder state'
@@ -67,7 +64,6 @@ class Model:
             self._configure_optimizer()
         self.compiled = True
 
-    
     def _configure_optimizer(self):
         'Configure the optimizer'
         self.optimizer = self.optimizer(loss_fn=self.loss_fn, model=self)
@@ -112,8 +108,8 @@ class Model:
     def fit(self, x, y, epochs=1, batch_size=1, validation_data=None):
         #if the model is not compiled then it will raise exception
         if not self.compiled:
-            raise Exception(f'Model is not compiled, use compile() method')
-        
+            raise Exception('Model is not compiled, use compile() method')
+
         #sets the batch size
         self.input.set_batch_size(batch_size)
         #stores the data to the input layer and validation data if there is validation data
