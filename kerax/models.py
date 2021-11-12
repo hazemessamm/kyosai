@@ -5,17 +5,16 @@ from kerax import layers
 from kerax import losses
 from tqdm import tqdm, trange #type: ignore
 from collections import deque
-from kerax.engine.trackable import Tracker
 
 
-@Tracker.track_model
+
 class Model:
     '''
     Model class
     input_layer: takes the input layer
     output_layer: takes the output layer
     '''
-    supported_kwargs = {
+    SUPPORTED_KWARGS = {
             'input',
             'output',
             'inputs',

@@ -1,3 +1,5 @@
+from jax._src.numpy.lax_numpy import sort
+from kerax.engine import Trackable
 from kerax.initializers import initializers
 from kerax import activations
 from jax import numpy as jnp #type: ignore
@@ -6,106 +8,36 @@ from jax.experimental import stax #type: ignore
 from jax.random import PRNGKey, split #type: ignore
 from kerax.layers import construction_layers
 from jaxlib.xla_extension import DeviceArray #type: ignore
+import kerax.jit as jit_execution
+from kerax.layers.base_layer_utils import is_in_construction_mode
 
-
-class Input:
-    '''
-    Input Layer that stores the training data and returns batches from it 
-    params:
-    shape: takes a tuple (0, H, W, C)
-    '''
-
-
-    def __init__(self, shape=None):
-        if not shape or not isinstance(shape, tuple):
-            raise Exception(f'shape should have value in a tuple, found {shape}')
-        self.shape = shape
-        #stores the index state
-        self.training_index = 0
-    
-
-    def get_shape(self):
-        return self.shape
-
-    def set_batch_size(self, batch_size):
-        'Stores the batch size'
-        if batch_size > 0:
-            self.batch_size = batch_size
-        else:
-            raise Exception('Batch size should be bigger than zero')
-
-    def store_data(self, x, y, **kwargs):
-        'stores the data also accepts validation_data '
-        if not hasattr(self, 'batch_size'):
-            raise Exception('batch size should have a value, use set_batch_size() and pass int value')
-        
-        if len(x) < self.batch_size:
-            raise Exception('batch size should be smaller than the training data')
-
-        if len(x) != len(y):
-            raise Exception(f"Training data should be equal training labels, {len(x)} != {len(y)}")
-        
-        self.training_data = x
-        self.training_labels = y
-        self.data_length = len(x)
-        self.num_batches = self.data_length // self.batch_size
-        self.built=True
-        if kwargs.get('validation_data', None) is not None:
-            self.validation_data, self.validation_labels = kwargs.get('validation_data')
-            if len(self.validation_data) != len(self.validation_labels):
-                raise Exception(f'Validation data should be equal validation labels, {len(x)} != {len(y)}')
-            self.validation_length = len(self.validation_data)
-            self.validation_index = 0
-            
-
-    def check_index_range(self, index_range, required_length):
-        return index_range > required_length
-    
-    def __call__(self, x):
-        return x
-
-    def get_training_batch(self):
-        if hasattr(self, 'built'):
-            current_batch_index = self.training_index*self.batch_size
-            status = self.check_index_range(current_batch_index+self.batch_size, self.data_length)
-            if status:
-                self.training_index = 0
-                current_batch_index = 0
-            current_batch_x = self.training_data[current_batch_index: current_batch_index+self.batch_size]
-            current_batch_y = self.training_labels[current_batch_index: current_batch_index+self.batch_size]
-            self.training_index += 1
-            return current_batch_x, current_batch_y
-
-    def get_validation_batch(self):
-        if not hasattr(self, 'validation_index'):
-            raise Exception('Validation data is not initialized')
-        current_batch_index = self.validation_index*self.batch_size
-        status = self.check_index_range(current_batch_index+self.batch_size, self.validation_length)
-        if status:
-            self.validation_index = 0
-            current_batch_index = 0
-        current_batch_x = self.validation_data[current_batch_index: current_batch_index+self.batch_size]
-        current_batch_y = self.validation_labels[current_batch_index: current_batch_index+self.batch_size]
-        self.validation_index += 1
-        return current_batch_x, current_batch_y
-
-    def __repr__(self):
-        return "<Input Layer>"
 
 class Layer:
     def __init__(self, key=False, trainable=True, name=None):
         #stores the layer params
-        self.params = ()
+        self._params = ()
         #stores the previous layer
         self.prev = []
+        self.next = []
         self.built = False
-        if not isinstance(key, DeviceArray):
-            key = PRNGKey(key)
-        self.key, self.subkey = split(key)
+        if key is not None:
+            if not isinstance(key, DeviceArray):
+                key = PRNGKey(key)
+            self.key, self.subkey = split(key)
         self.trainable = trainable
-        self.name = self.__class__.__name__ if name is None else name
+        self.__name = Trackable.get_uid(self.__class__.__name__ if name is None else name)
         self.output = None
         self.init_fn, self.apply_fn = None, None
+        self.index = Trackable.depth
+        Trackable.track_layer(self.__name, self)
+
+    def _check_jit(self):
+        if jit_execution.IS_JIT_ENABLED:
+            self.apply_fn = jit(self.apply_fn)
+
+    @property
+    def name(self):
+        return self.__name
 
     def get_initializer(self, identifier):
         'Returns the specified initializer'
@@ -117,11 +49,29 @@ class Layer:
 
     def connect(self, layer):
         'Connects the current layer with the previous layer'
-        self.prev = layer
+        if isinstance(layer, (list, tuple)):
+            self.prev += layer
+        else:
+            self.prev.append(layer)
+
+        if isinstance(layer, (list, tuple)):
+            for l in layer:
+                l.next.append(self)
+        else:
+            layer.next.append(self)
+        
     
-    def get_weights(self):
+    @property
+    def weights(self):
         'returns weights'
-        return self.params
+        return self._params
+    
+    @property
+    def params(self):
+        return self._params
+
+    def get_weights(self):
+        return self._params
 
     def set_weights(self, new_weights):
         if not isinstance(new_weights, tuple):
@@ -129,11 +79,10 @@ class Layer:
         #looping over the current weights and the new weights
         #checks the shape of each dimension
         #finally stores the new weights
-        for current_p, new_p in zip(self.params, new_weights):
+        for current_p, new_p in zip(self._params, new_weights):
             if current_p.shape != new_p.shape:
-                raise Exception(f"New weights are not compatible with the current weight shapes, {current_p.shape} != {new_p.shape}")
-        
-        self.params = new_weights
+                raise Exception(f"New weights are not compatible with the current weight shapes, {current_p.shape} != {new_p.shape}")        
+        self._params = new_weights
 
     def update_weights(self, new_weights):
         if self.trainable:
@@ -148,6 +97,35 @@ class Layer:
         return self.output
 
 
+class Input(Layer):
+    '''
+    Input Layer that stores the training data and returns batches from it 
+    params:
+    shape: takes a tuple (0, H, W, C)
+    '''
+
+
+    def __init__(self, shape=None, name=None):
+        super().__init__(key=None, trainable=False, name=name)
+        if not shape or not isinstance(shape, tuple):
+            raise Exception(f'shape should have value in a tuple, found {shape} with type {type(shape)}')
+        self._shape = shape
+    
+    @property
+    def shape(self):
+        return self._shape
+
+    def __call__(self, inputs):
+        if is_in_construction_mode(inputs):
+            self.connect(inputs)
+        else:
+            self.output = inputs
+            return self.output
+        
+
+    def __repr__(self):
+        return "<Input Layer>"
+
 
 class Dense(Layer):
     '''
@@ -161,33 +139,45 @@ class Dense(Layer):
     bias_initializer: stores the bias initializer, default "normal"
 
     '''
-    def __init__(self, units, activation=None, kernel_initializer='glorot_normal', bias_initializer='normal', 
-    input_shape=None, trainable=True, key=PRNGKey(100)):
+    def __init__(self, units, activation=None, kernel_initializer='glorot_normal', bias_initializer='normal', trainable=True, key=PRNGKey(100), **kwargs):
         super(Dense, self).__init__(key=key, trainable=trainable)
         self.units = units
         self.activation = self.get_activation(activation)
         self.kernel_initializer = self.get_initializer(kernel_initializer)
         self.bias_initializer = self.get_initializer(bias_initializer)
         self.init_fn, self.apply_fn = stax.Dense(units, W_init=self.kernel_initializer, b_init=self.bias_initializer)
-        self.apply_fn = jit(self.apply_fn)
+        self._check_jit()
+        #self.apply_fn = jit(self.apply_fn)
+
+        input_shape = kwargs.pop('input_shape', False)
+        if input_shape:
+            self.build(input_shape=input_shape)
     
-    def get_kernel_shape(self):
-        return self.kernel_shape
+    @property
+    def kernel_shape(self):
+        return self._kernel_shape
 
-    def get_bias_shape(self):
-        return self.bias_shape
+    @property
+    def bias_shape(self):
+        return self._bias_shape
 
-    def get_output_shape(self):
-        return self.shape
+    @property
+    def output_shape(self):
+        return self._shape
+    
+    @property
+    def input_shape(self):
+        return self._input_shape
 
-    def get_input_shape(self):
-        return self.input_shape
+    @property
+    def shape(self):
+        return self._shape
 
     def build(self, input_shape):
-        self.shape, self.params = self.init_fn(rng=self.key, input_shape=input_shape)
-        self.input_shape = input_shape
-        self.kernel_shape = self.params[0].shape
-        self.bias_shape = self.params[0].shape
+        self._shape, self._params = self.init_fn(rng=self.key, input_shape=input_shape)
+        self._input_shape = input_shape
+        self._kernel_shape = self._params[0].shape
+        self._bias_shape = self._params[0].shape
         self.built = True
 
     def call_with_external_weights(self, params, inputs):
@@ -196,7 +186,7 @@ class Dense(Layer):
 
     def call(self, inputs):
         'Used during training to pass the parameters while getting the gradients'
-        self.output = self.apply_fn(inputs=inputs, params=self.params)
+        self.output = self.apply_fn(inputs=inputs, params=self._params)
         return self.activation(self.output) if self.activation is not None else self.output
 
     def __call__(self, inputs):
@@ -231,11 +221,26 @@ class Flatten(Layer):
         #initializes flatten layer
         #returns initialization function and apply function
         self.init_fn, self.apply_fn = stax.Flatten
-        self.apply_fn = jit(self.apply_fn)
+        #self.apply_fn = jit(self.apply_fn)
+        self._check_jit()
+
+    @property
+    def output_shape(self):
+        return self._shape
+    
+    @property
+    def input_shape(self):
+        return self._input_shape
+
+    
+    @property
+    def shape(self):
+        return self._shape
+
 
     def build(self, input_shape):
-        self.shape, self.params = self.init_fn(input_shape=input_shape, rng=self.key)
-        self.input_shape = input_shape
+        self._shape, self._params = self.init_fn(input_shape=input_shape, rng=self.key)
+        self._input_shape = input_shape
         self.built = True
 
     def call_with_external_weights(self, params, inputs):
@@ -244,13 +249,13 @@ class Flatten(Layer):
 
     def call(self, inputs):
         'Used during training to pass the parameters while getting the gradients'
-        self.output = self.apply_fn(inputs=inputs, params=self.params)
+        self.output = self.apply_fn(inputs=inputs, params=self._params)
         return self.output
 
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
-        if isinstance(inputs, (Layer, Input)):
+        if is_in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)
             return self
@@ -259,7 +264,7 @@ class Flatten(Layer):
             if self.input_shape != inputs.shape:
                 raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
             else:
-                return self.call(inputs, self.params)
+                return self.call(inputs)
 
     def __repr__(self):
         if self.built:
@@ -280,19 +285,37 @@ class Dropout(Layer):
         self.rate = rate
         self.key = key
         self.init_fn, self.apply_fn = stax.Dropout(rate=rate, mode='train')
-        self.apply_fn = jit(self.apply_fn)
+        #self.apply_fn = jit(self.apply_fn)
+        self._check_jit()
     
+    @property
+    def output_shape(self):
+        return self._shape
+    
+    @property
+    def input_shape(self):
+        return self._input_shape
+
+    @property
+    def kernel_shape(self):
+        return self._kernel_shape
+    
+    @property
+    def bias_shape(self):
+        return self._bias_shape
+
+
     def build(self, input_shape):
-        self.shape, self.params = self.init_fn(rng=self.key, input_shape=input_shape)
-        self.input_shape = input_shape
-        self.kernel_shape = self.params[0].shape
-        self.bias_shape = self.params[-1].shape
+        self._shape, self._params = self.init_fn(rng=self.key, input_shape=input_shape)
+        self._input_shape = input_shape
+        self._kernel_shape = self._params[0].shape
+        self._bias_shape = self._params[-1].shape
         self.built = True
 
     def call(self, inputs, training=False):
         'Used during training to pass the parameters while getting the gradients'
         if training:
-            self.output = self.apply_fn(inputs=inputs, params=self.params)
+            self.output = self.apply_fn(inputs=inputs, params=self._params)
         else:
             self.output = inputs
         return self.output
@@ -304,7 +327,7 @@ class Dropout(Layer):
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
-        if isinstance(inputs, (Layer, Input)):
+        if is_in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)
             return self
@@ -328,12 +351,12 @@ class Activation(Layer):
         self.init_fn, self.apply_fn = construction_layers.Activation(identifier)
     
     def build(self, input_shape):
-        self.shape, self.params = self.init_fn(input_shape)
+        self.shape, self._params = self.init_fn(input_shape)
         self.input_shape = self.shape
         self.built=True
 
     def call(self, inputs):
-        self.output = self.apply_fn(self.params, inputs)
+        self.output = self.apply_fn(self._params, inputs)
         return self.output
 
     def call_with_external_weights(self, params, inputs):
@@ -343,7 +366,7 @@ class Activation(Layer):
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
-        if isinstance(inputs, (Layer, Input)):
+        if is_in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)
             return self
@@ -384,7 +407,7 @@ class Concatenate(Layer):
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
-        if isinstance(inputs, (Layer, Input)):
+        if is_in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)
             return self
@@ -401,14 +424,22 @@ class Add(Layer):
     """
     Still working on it
     """
-    def __init__(self, layers, name=None):
+    def __init__(self, name=None):
         super(Add, self).__init__(name=name)
-        self.layers = layers
         self.init_fn, self.apply_fn = construction_layers.Add()
+
+    @property
+    def shape(self):
+        return self._shape
     
+    @property
+    def input_shape(self):
+        return self._input_shape
+
+
     def build(self, input_shape):
-        self.shape, self.params = self.init_fn(input_shape, self.key)
-        self.input_shape = self.shape
+        self._shape, self._params = self.init_fn(input_shape, self.key)
+        self._input_shape = self.shape
         self.built = True
 
     def call_with_external_weights(self, params, inputs):
@@ -423,9 +454,9 @@ class Add(Layer):
 
 
     def call(self, inputs):
-        self.output = self.layers[0].get_output()
-        for layer in self.layers[1:]:
-            self.output = self.apply_fn(self.params, self.output, layer.get_output())
+        self.output = self.prev[0].get_output()
+        for layer in self.prev[1:]:
+            self.output = self.apply_fn(self._params, self.output, layer.get_output())
         return self.output
         
     def call_with_external_weights(self, params, inputs):
@@ -433,18 +464,22 @@ class Add(Layer):
         return self.output
 
     def __call__(self, inputs, params=None):
-        if not hasattr(inputs, 'shape'):
-            raise Exception("Inputs should be tensors, or use Input layer for configuration")
-        if isinstance(inputs, (Layer, Input)):
-            self.build(inputs.shape)
+        if isinstance(inputs, list) and all(
+            isinstance(cur_input, Layer) for cur_input in inputs
+        ):
+            self.build(inputs[0].shape)
             self.connect(inputs)
             return self
+        elif all(hasattr(cur_input, 'shape') for cur_input in inputs):
+            self.call(inputs)
         else:
-            self.build(inputs.shape)
-            if self.input_shape != inputs.shape:
-                raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
-            else:
-                return self.call(inputs)
+            raise Exception("Inputs to the Add layers should be inside a list with at least length = 2")
+    
+    def __repr__(self) -> str:
+        if self.built:
+            return f"<Add Layer with input shape {self.input_shape} and output shape {self.input_shape}>"
+        else:
+            return "<Add layer>"
 
 class BatchNormalization(Layer):
     def __init__(self, key=PRNGKey(100), trainable=True, axis=-1, name=None):
@@ -452,24 +487,25 @@ class BatchNormalization(Layer):
         self.axis = axis
         self.name = name
         self.init_fun, self.apply_fn = stax.BatchNorm(axis=axis)
+        self._check_jit()
     
     def build(self, input_shape):
-        self.shape, self.params = self.init_fun(rng=self.key, input_shape=input_shape)
+        self.shape, self._params = self.init_fun(rng=self.key, input_shape=input_shape)
         self.input_shape = self.shape
-        self.built=True
+        self.built = True
     
     def call(self, inputs):
-        self.output = self.apply_fn(params=self.params, x=inputs)
+        self.output = self.apply_fn(params=self._params, x=inputs)
         return self.output
 
     def call_with_external_weights(self, params, inputs):
-        self.output =  self.apply_fn(params=params, inputs=inputs)
+        self.output = self.apply_fn(params=params, inputs=inputs)
         return self.output
 
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
-        if isinstance(inputs, (Layer, Input)):
+        if is_in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)
             return self

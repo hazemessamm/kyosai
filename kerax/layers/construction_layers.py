@@ -1,6 +1,6 @@
-from jax import nn #type: ignore
 from kerax.activations import activations
 from jax import numpy as jnp #type:ignore
+from jax import lax
 
 #Construction layer for the activation
 def Activation(identifier):
@@ -28,7 +28,7 @@ def Add():
         return input_shape, ()
     
     def apply_fn(params, x1, x2):
-        return jnp.add(x1, x2)
+        return lax.add(x1, x2)
 
     return init_fn, apply_fn
 

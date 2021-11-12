@@ -6,6 +6,7 @@ from jax.nn.initializers import normal #type: ignore
 from jax.random import PRNGKey, split #type: ignore
 import numpy as np
 from .core import Layer, Input
+from kerax.layers.base_layer_utils import is_in_construction_mode
 
 
 class Conv2D(Layer):
@@ -44,25 +45,27 @@ class Conv2D(Layer):
         self.bias_initializer = self.get_initializer(bias_initializer)
         self.built = False
         self.dimension_numbers = (input_dim_order, kernel_dim_order, output_dim_order)
-        self.validate_init()
+        self._validate_init()
 
         self.init_fn, self.apply_fn = stax.GeneralConv(dimension_numbers=self.dimension_numbers, 
         filter_shape=self.kernel_size, padding=padding, out_chan=filters, W_init=self.kernel_initializer, b_init=self.bias_initializer)
-        self.apply_fn = jit(self.apply_fn)
-        
+        #self.apply_fn = jit(self.apply_fn)
+        self._check_jit()
         shape = kwargs.pop('shape', False) or kwargs.pop('input_shape', False)
         if shape:
             self.build(shape)
-
-    def get_kernel_shape(self):
+    
+    @property
+    def kernel_shape(self):
         'Returns the kernel dimensions'
-        return self.kernel_shape
+        return self._kernel_shape
 
-    def get_bias_shape(self):
+    @property
+    def bias_shape(self):
         'Returns the bias dimensions'
-        return self.bias_shape
+        return self._bias_shape
 
-    def validate_init(self):
+    def _validate_init(self):
         if isinstance(self.strides, int):
             self.strides = (self.strides, self.strides)
         elif isinstance(self.strides, tuple) and len(self.strides) == 1:
@@ -81,15 +84,15 @@ class Conv2D(Layer):
             raise Exception(f'Expected input shape to be 3 dimensions found {len(input_shape)} dimensions')
 
         #initializes the conv layer
-        self.shape, self.params = self.init_fn(input_shape=input_shape, rng=self.key)
+        self.shape, self._params = self.init_fn(input_shape=input_shape, rng=self.key)
         self.input_shape = input_shape
-        self.kernel_shape = self.params[0].shape
-        self.bias_shape = self.params[1].shape
+        self._kernel_shape = self._params[0].shape
+        self._bias_shape = self._params[1].shape
         self.built = True
 
     def call(self, inputs):
         'Used during training to pass the parameters while getting the gradients'
-        self.output = self.apply_fn(inputs=inputs, params=self.params)
+        self.output = self.apply_fn(inputs=inputs, params=self._params)
         return self.activation(self.output) if self.activation else self.output
 
     def call_with_external_weights(self, params, inputs):
@@ -101,7 +104,7 @@ class Conv2D(Layer):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
         #here it takes the previous layer to build the current layer
-        if isinstance(inputs, (Layer, Input)):
+        if is_in_construction_mode(inputs):
             self.build(inputs.shape)
             #General function used to connect with the previous layer
             self.connect(inputs)
@@ -140,12 +143,14 @@ class MaxPool2D(Layer):
         self.strides = strides
         self.padding = padding
         self.spec = spec
-        self.validate_init()
+        self._validate_init()
+        
         #initializing maxpool
         self.init_fn, self.apply_fn = stax.MaxPool(window_shape=pool_size, padding=padding, strides=strides, spec=spec)
-        self.apply_fn = jit(self.apply_fn)
-
-    def validate_init(self):
+        #self.apply_fn = jit(self.apply_fn)
+        self._check_jit()
+        
+    def _validate_init(self):
         if isinstance(self.pool_size, int):
             self.pool_size = (self.pool_size, self.pool_size)
         elif isinstance(self.pool_size, tuple) and len(self.pool_size) == 1:
@@ -158,12 +163,12 @@ class MaxPool2D(Layer):
     
     def build(self, input_shape):
         #returns output shape, and the params
-        self.shape, self.params = self.init_fn(input_shape=input_shape, rng=self.key)
+        self.shape, self._params = self.init_fn(input_shape=input_shape, rng=self.key)
         self.input_shape = input_shape
         self.built = True
 
     def call(self, inputs):
-        self.output = self.apply_fn(self.params, inputs)
+        self.output = self.apply_fn(self._params, inputs)
         return self.output
 
     def call_with_external_weights(self, params, inputs):
@@ -174,7 +179,7 @@ class MaxPool2D(Layer):
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
-        if isinstance(inputs, (Layer, Input)):
+        if is_in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)
             return self
@@ -183,7 +188,7 @@ class MaxPool2D(Layer):
             if self.input_shape != inputs.shape:
                 raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
             else:
-                return self.apply_fn(inputs=inputs, params=self.params)
+                return self.apply_fn(inputs=inputs, params=self._params)
     def __repr__(self):
         if self.built:
             return f"<MaxPool Layer with input shape {self.input_shape} and output shape {self.shape}>"
