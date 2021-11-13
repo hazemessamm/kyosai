@@ -1,5 +1,5 @@
 from jax import numpy as jnp #type:ignore
-
+from jax import lax
 
 class Loss:
     def __init__(self, model, reduction=None, name=None):
@@ -57,7 +57,7 @@ class Huber(Loss):
         abs_error = jnp.abs(error)
         half = jnp.array(0.5, dtype=abs_error.dtype)
         return jnp.mean(jnp.where(abs_error <= self.delta, 
-        half * jnp.square(error), self.delta *abs_error -half * jnp.square(self.delta)), axis=-1)
+        half * jnp.square(error), self.delta*abs_error-half*jnp.square(self.delta)), axis=-1)
 
 
 class BinaryCrossEntropy(Loss):

@@ -159,12 +159,11 @@ class MaxPool2D(Layer):
     def build(self, input_shape):
         #initializing maxpool
         init_fn, self.apply_fn = stax.MaxPool(window_shape=self.pool_size, padding=self.padding, strides=self.strides, spec=self.spec)
-        #self.apply_fn = jit(self.apply_fn)
-        self._check_jit()
         #returns output shape, and the params
-        self.shape, self._params = init_fn(input_shape=input_shape, rng=self.key)
+        self.shape, self._params = init_fn(input_shape=(1, *input_shape[1:]), rng=self.key)
         self.input_shape = input_shape
         self.built = True
+        self._check_jit()
 
     def call(self, inputs):
         self.output = self.apply_fn(self._params, inputs)
@@ -172,7 +171,6 @@ class MaxPool2D(Layer):
 
     def call_with_external_weights(self, params, inputs):
         self.output =  self.apply_fn(params=params, inputs=inputs)
-        print("here", self.output)
         return self.output
 
     def __call__(self, inputs, **kwargs):

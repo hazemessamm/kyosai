@@ -10,6 +10,7 @@ from kerax.engine.trackable import Trackable
 from kerax.layers.core import Layer
 
 
+
 class Model:
     '''
     Model class
@@ -53,6 +54,10 @@ class Model:
             return self._params
         return self.graph.params
 
+    @property
+    def compiled(self):
+        return self._compiled
+
     def initialize_graph(self, *args, **kwargs):
         'Stores the layers and paramters'
         if not self._sequential_model:
@@ -89,10 +94,10 @@ class Model:
         self.graph.params = weights
 
     def update_weights(self, weights):
-        self.params.clear()
+        self.graph.params.clear()
         for layer, w in zip(self.layers, weights):
-                layer.update_weights(w)
-                self.graph.params.append(layer.params)
+            layer.update_weights(w)
+            self.graph.params.append(layer.params)
 
     def train_step(self, x, y):
         'Returns loss value and takes training batch'
@@ -118,7 +123,7 @@ class Model:
             with trange(len(self.dataset), bar_format='{l_bar}{bar:40}{r_bar}{bar:-20b}') as t:
                 for _ in t:
                     batch_x, batch_y = self.dataset.get_batch()
-                    train_loss = self.train_step(batch_x, batch_y) / epoch
+                    train_loss = self.train_step(batch_x, batch_y)
                     if validation_data:
                         validation_loss = self.test_step(validation_data[0], validation_data[1])
                         t.set_postfix(loss=train_loss, validation_loss=validation_loss, remaining_epochs=remaining_epochs)
