@@ -36,19 +36,27 @@ class TensorLikeDataAdapter(DataAdapter):
     def shape(self):
         return self.shape
 
+    def __len__(self):
+        return self.batch_size
+
     def check_index_range(self, index_range, required_length):
         return index_range > required_length
 
+    def get_dataset(self):
+        return (self.x, self.y)
+    
+    def batch_size(self):
+        return self.batch_size
+
     def get_batch(self):
-        if hasattr(self, 'built'):
-            current_batch_index = self.training_index*self.batch_size
-            status = self.check_index_range(current_batch_index+self.batch_size, self.data_length)
-            if status:
-                self.training_index = 0
-                current_batch_index = 0
-            current_batch_x = self.training_data[current_batch_index: current_batch_index+self.batch_size]
-            current_batch_y = self.training_labels[current_batch_index: current_batch_index+self.batch_size]
-            self.training_index += 1
-            return current_batch_x, current_batch_y
+        current_batch_index = self.training_index*self.batch_size
+        status = self.check_index_range(current_batch_index+self.batch_size, self.num_samples)
+        if status:
+            self.training_index = 0
+            current_batch_index = 0
+        current_batch_x = self.x[current_batch_index: current_batch_index+self.batch_size]
+        current_batch_y = self.y[current_batch_index: current_batch_index+self.batch_size]
+        self.training_index += 1
+        return current_batch_x, current_batch_y
     
     

@@ -1,6 +1,5 @@
 from collections import namedtuple, deque
-
-
+from kerax.layers.core import Input
 
 class Graph:
     def __init__(self, **kwargs):
@@ -8,9 +7,8 @@ class Graph:
         self.connected_layers = []
         self.connection = namedtuple('Layer', ['layer1', 'layer2'])
         self.layers = []
-        self.visited = set()
-        self.queue = deque()
-        self.connect_layers()
+        self.params = []
+        self.get_layers()
 
     def flatten(self, x):
         def _flatten(x, result=[]):
@@ -44,7 +42,7 @@ class Graph:
             self.input = None
         else:
             self.input = inputs
-            self.inputs = None
+            self.inputs = [inputs]
 
         outputs = kwargs.get('outputs', False) or kwargs.get('output', False)
 
@@ -67,36 +65,74 @@ class Graph:
             self.output = None
         else:
             self.output = outputs
-            self.outputs = None
+            self.outputs = [outputs]
 
     def get_layers(self):
+        queue = deque()
+
         if self.inputs:
-            self.queue += self.flatten(self.inputs)
+            queue += self.flatten(self.inputs)
         else:
-            self.queue.append(self.input)
+            queue.append(self.input)
 
         if self.outputs:
-            self.queue += self.flatten(self.outputs)
+            queue += self.flatten(self.outputs)
         else:
-            self.queue.append(self.output)
+            queue.append(self.output)
 
-        self.visited.add(i.index for i in self.queue)
-        self.layers += self.queue
-                
-        while self.queue:
-            current_pointer = self.queue.popleft()
+        visited = {i.index for i in queue}
+        self.layers = [*queue]
+
+        while queue:
+            current_pointer = queue.popleft()
             for i in current_pointer.next:
-                
-                if i.index not in self.visited:
+                if i.index not in visited:
                     self.layers.append(i)
-                    self.queue.append(i)
-                    self.visited.add(i.index)
+                    queue.append(i)
+                    visited.add(i.index)
+        self.layers = sorted(self.layers, key=lambda x: x.index)
+        for layer in self.layers:
+            self.params.append(layer.params)
 
     def connect_layers(self):
         self.get_layers()
         self.layers = sorted(self.layers, key=lambda x: x.index)
-        self.queue = deque([self.layers[0]])
-        self.visited = {self.layers[0].index}
 
         for layer in self.layers:
             self.connected_layers += [self.connection(layer, i) for i in layer.next]
+    
+    def same_input_len(self, inputs):
+        return len(inputs) == len(self.inputs)
+
+    def call(self, *args):
+        'This method is responsible for flowing the data through the graph (Functional Model)'
+        if not self.same_input_len(args):
+            raise Exception(f'Not the same input length expected {len(self.inputs)} found {len(args)}')
+        
+        for arg, input_layer in zip(args, self.inputs):
+            input_layer(arg)
+
+        for layer in self.layers:
+            prevs = layer.prev
+            if not isinstance(layer, Input):
+                if len(prevs) > 1:
+                    outputs = layer([prev.output for prev in prevs])
+                elif len(prevs) == 1:
+                    outputs = layer(prevs[0].output)
+        return outputs
+
+    def call_with_external_weights(self, params, *args):
+        for arg, input_layer in zip(args, self.inputs):
+            input_layer(arg)
+
+        for layer, param in zip(self.layers, params):
+            prevs = layer.prev
+            if not isinstance(layer, Input):
+                if len(prevs) > 1:
+                    outputs = layer.call_with_external_weights(param, [prev.output for prev in prevs])
+                elif len(prevs) == 1:
+                    outputs = layer.call_with_external_weights(param, prevs[0].output)
+        return outputs
+    
+    def __call__(self, inputs):
+        return self.call(inputs)

@@ -21,12 +21,13 @@ class Optimizer:
         self.loss_grad = jit(grad(loss_fn))
 
     #this function should be implemented by the subclasses
+
     def apply_gradients(self, grads):
         raise NotImplementedError("This method should be implemented in a subclass and should not be called from the Optimizer base class")
     
     def increment_step_index(self):
         'Increment step index'
-        self.step_index += 1
+        self.step_index += 1 
 
     def get_gradients(self, x, y):
         'Returns the loss value and the gradients'
@@ -61,6 +62,7 @@ class SGD(Optimizer):
         self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
         #Apply new weights on the model
         self.model.set_weights(self.get_params(self.optimizer_state))
+        self.increment_step_index()
 
 class Adam(Optimizer):
     '''
@@ -83,9 +85,10 @@ class Adam(Optimizer):
         self.optimizer_state = self.init_fn(model.params)
         self.update_fn = jit(self.update_fn)
 
-    def apply_gradients(self, grads, step=0):
+    def apply_gradients(self, grads):
         self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
         self.model.update_weights(self.get_params(self.optimizer_state))
+        self.increment_step_index()
 
 class Adagrad(Optimizer):
     '''
@@ -107,6 +110,7 @@ class Adagrad(Optimizer):
     def apply_gradients(self, grads, step=0):
         self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
         self.model.set_weights(self.get_params(self.optimizer_state))
+        self.increment_step_index()
 
 supported_optimizers = {
     'sgd': SGD,

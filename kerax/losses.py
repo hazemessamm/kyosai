@@ -91,3 +91,5 @@ def get(identifier):
             raise Exception("Cannot find the specified loss function")
         else:
             return loss_fn
+    elif isinstance(identifier, Loss):
+        return identifier

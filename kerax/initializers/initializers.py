@@ -1,6 +1,4 @@
-from jax.nn import initializers as jax_initializers#type: ignore
-from jaxlib.xla_extension import DeviceArray #type: ignore
-from jax.random import PRNGKey, split #type: ignore
+from jax.nn import initializers as jax_initializers #type: ignore
 
 
 class InitializerNotFoundException(Exception):
