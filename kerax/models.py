@@ -78,7 +78,7 @@ class Model:
         'Takes inputs and returns predictions'
         return self.graph(x)
 
-    def call_with_external_weights(self, params, x, training=False):
+    def call_with_external_weights(self, params, x):
         'Takes inputs and params and returns predictions'
         return self.graph.call_with_external_weights(params, x)
 

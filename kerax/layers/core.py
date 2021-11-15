@@ -52,7 +52,7 @@ class Layer:
     def connect(self, layer):
         'Connects the current layer with the previous layer'
         if isinstance(layer, (list, tuple)):
-            self.prev += layer
+            self.prev = [*self.prev, *layer]
         else:
             self.prev.append(layer)
 

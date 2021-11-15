@@ -13,12 +13,12 @@ class Optimizer:
         - model: stores the model to update it's weights every step
         - learning_rate: stores the learning rate (step_size), default: 0.0001
     '''
-    def __init__(self, loss_fn, model, learning_rate=0.001):
+    def __init__(self, loss_fn, model, learning_rate=0.0001):
         self.learning_rate = learning_rate
         self.loss_fn = loss_fn
         self.model = model
         self.step_index = 0
-        self.loss_grad = jit(grad(loss_fn))
+        self.loss_grad = grad(loss_fn)
 
     #this function should be implemented by the subclasses
 
@@ -31,6 +31,7 @@ class Optimizer:
 
     def get_gradients(self, x, y):
         'Returns the loss value and the gradients'
+        # self.increment_step_index()
         return self.loss_grad(self.model.params, x, y)
 
 class SGD(Optimizer):
@@ -42,8 +43,8 @@ class SGD(Optimizer):
         - model: stores the model to update it's weights every step
         - learning_rate: stores the learning rate (step_size), default: 0.0001
     '''
-    def __init__(self, loss_fn, model, learning_rate=0.001):
-        super(SGD, self).__init__(loss_fn=loss_fn, model=model, learning_rate=0.001)
+    def __init__(self, loss_fn, model, learning_rate=0.0001):
+        super(SGD, self).__init__(loss_fn=loss_fn, model=model, learning_rate=learning_rate)
         '''
         Initializes the Stochastic Gradient Descent
         returns initializer function, update function and get params function
@@ -56,13 +57,12 @@ class SGD(Optimizer):
         self.optimizer_state = self.init_fn(model.params)
         self.update_fn = jit(self.update_fn)
 
-    def apply_gradients(self, grads, step=0):
+    def apply_gradients(self, grads):
         'Updates the model params'
         #returns new optimizer state by calling the update function
         self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
         #Apply new weights on the model
-        self.model.set_weights(self.get_params(self.optimizer_state))
-        self.increment_step_index()
+        self.model.update_weights(self.get_params(self.optimizer_state))
 
 class Adam(Optimizer):
     '''
@@ -76,8 +76,8 @@ class Adam(Optimizer):
         - beta_2: a positive scalar value for beta_2, the exponential decay rate for the second moment estimates, default: 0.999
         - epsilon: a positive scalar value for epsilon, a small constant for numerical stability, default: 1e-8
     '''
-    def __init__(self, loss_fn, model, learning_rate=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08):
-        super(Adam, self).__init__(loss_fn=loss_fn, model=model, learning_rate=0.001)
+    def __init__(self, loss_fn, model, learning_rate=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08):
+        super(Adam, self).__init__(loss_fn=loss_fn, model=model, learning_rate=learning_rate)
         self.beta_1 = beta_1
         self.beta_2 = beta_2
         self.epsilon = epsilon
@@ -88,7 +88,7 @@ class Adam(Optimizer):
     def apply_gradients(self, grads):
         self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
         self.model.update_weights(self.get_params(self.optimizer_state))
-        self.increment_step_index()
+        
 
 class Adagrad(Optimizer):
     '''
@@ -104,13 +104,13 @@ class Adagrad(Optimizer):
         super(Adagrad, self).__init__(loss_fn=loss_fn, model=model, learning_rate=learning_rate)
         self.momentum = momentum
         self.init_fn, self.update_fn, self.get_params = optimizers.adagrad(step_size=learning_rate, momentum=momentum)
-        self.optimizer_state = self.init_fn(model.trainable_params)
+        self.optimizer_state = self.init_fn(model.params)
         self.update_fn = jit(self.update_fn)
     
     def apply_gradients(self, grads, step=0):
         self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
-        self.model.set_weights(self.get_params(self.optimizer_state))
-        self.increment_step_index()
+        self.model.update_weights(self.get_params(self.optimizer_state))
+
 
 supported_optimizers = {
     'sgd': SGD,
