@@ -1,3 +1,4 @@
+from jax._src.api import vmap
 from kerax.engine import Trackable
 from kerax.initializers import initializers
 from kerax import activations
@@ -182,13 +183,17 @@ class Dense(Layer):
         self.built = True
 
     def call_with_external_weights(self, params, inputs):
-        self.output = self.apply_fn(params=params, inputs=inputs)
-        return self.activation(self.output) if self.activation is not None else self.output
+        self.output = self.apply_fn(params, inputs)
+        if self.activation:
+            self.output = self.activation(self.output)
+        return self.output
 
     def call(self, inputs):
         'Used during training to pass the parameters while getting the gradients'
-        self.output = self.apply_fn(inputs=inputs, params=self._params)
-        return self.activation(self.output) if self.activation is not None else self.output
+        self.output = self.apply_fn(self._params, inputs)
+        if self.activation:
+            self.output = self.activation(self.output)
+        return self.output
 
     def __call__(self, inputs):
         if not hasattr(inputs, 'shape'):
@@ -227,18 +232,15 @@ class Flatten(Layer):
     @property
     def input_shape(self):
         return self._input_shape
-
     
     @property
     def shape(self):
         return self._shape
 
-
     def build(self, input_shape):
         #initializes flatten layer
         #returns initialization function and apply function
         init_fn, self.apply_fn = stax.Flatten
-        #self.apply_fn = jit(self.apply_fn)
         self._check_jit()
         self._shape, self._params = init_fn(input_shape=input_shape, rng=self.key)
         self._input_shape = input_shape
@@ -304,9 +306,9 @@ class Dropout(Layer):
 
 
     def build(self, input_shape):
-        self.init_fn, self.apply_fn = stax.Dropout(rate=self.rate, mode='train')
+        init_fn, self.apply_fn = stax.Dropout(rate=self.rate, mode='train')
         self._check_jit()
-        self._shape, self._params = self.init_fn(rng=self.key, input_shape=input_shape)
+        self._shape, self._params = init_fn(rng=self.key, input_shape=input_shape)
         self._input_shape = input_shape
         self._kernel_shape = self._params[0].shape
         self._bias_shape = self._params[-1].shape
@@ -316,7 +318,7 @@ class Dropout(Layer):
         'Used during training to pass the parameters while getting the gradients'
         training = kwargs.get('training', False)
         if training:
-            self.output = self.apply_fn(inputs=inputs, params=self._params)
+            self.output = self.apply_fn(params=self._params, inputs=inputs)
         else:
             self.output = inputs
         return self.output

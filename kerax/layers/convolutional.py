@@ -1,12 +1,8 @@
-from jax import lax, nn #type: ignore
-from jax.experimental import stax #type: ignore
-from jax import numpy as jnp #type: ignore
-from jax import jit #type: ignore
-from jax.nn.initializers import normal #type: ignore
-from jax.random import PRNGKey, split #type: ignore
-import jax.numpy as jnp
-from .core import Layer, Input
 from jax import vmap
+from jax.experimental import stax #type: ignore
+from jax.random import PRNGKey #type: ignore
+from .core import Layer
+from jax import numpy as jnp
 
 class Conv2D(Layer):
     '''
@@ -92,12 +88,16 @@ class Conv2D(Layer):
 
     def call(self, inputs):
         'Used during training to pass the parameters while getting the gradients'
-        self.output = self.apply_fn(inputs=inputs, params=self._params)
-        return self.activation(self.output) if self.activation else self.output
+        self.output = self.apply_fn(self._params, inputs)
+        if self.activation:
+            self.output = self.activation(self.output)
+        return self.output
 
     def call_with_external_weights(self, params, inputs):
         self.output =  self.apply_fn(params=params, inputs=inputs)
-        return self.activation(self.output) if self.activation is not None else self.output
+        if self.activation:
+            self.output = self.activation(self.output)
+        return self.output
 
     
     def __call__(self, inputs, **kwargs):
@@ -115,7 +115,7 @@ class Conv2D(Layer):
             if not self.built:
                 self.build(inputs.shape)
 
-            if self.input_shape[1:] != inputs.shape[1:]:
+            if self.input_shape[-3:] != inputs.shape[-3:] and len(self.input_shape) == 4:
                 raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
             else:
                 return self.call(inputs)
@@ -162,6 +162,7 @@ class MaxPool2D(Layer):
         #returns output shape, and the params
         self.shape, self._params = init_fn(input_shape=(1, *input_shape[1:]), rng=self.key)
         self.input_shape = input_shape
+        self.shape = (None, *self.shape[1:])
         self.built = True
         self._check_jit()
 

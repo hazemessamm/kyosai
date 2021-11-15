@@ -1,6 +1,6 @@
 from jax.experimental import optimizers #type: ignore
 from jax import value_and_grad, grad #type: ignore
-from jax import jit, vmap #type: ignore
+from jax import jit #type: ignore
 
 class Optimizer:
     '''
@@ -18,7 +18,7 @@ class Optimizer:
         self.loss_fn = loss_fn
         self.model = model
         self.step_index = 0
-        self.loss_grad = grad(loss_fn)
+        self.loss_grad = jit(grad(loss_fn))
 
     #this function should be implemented by the subclasses
 

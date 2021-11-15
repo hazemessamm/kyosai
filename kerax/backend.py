@@ -1,7 +1,7 @@
 from kerax.engine import Trackable
 import jax
 
-PRECISION = 'float32'
+_PRECISION = 'float32'
 
 def clear_session():
     Trackable.reset()
@@ -22,9 +22,9 @@ def backend():
     return 'jax'
 
 def precision():
-    global PRECISION
-    return PRECISION
+    global _PRECISION
+    return _PRECISION
 
 def set_precision(precision='float32'):
-    global PRECISION
-    PRECISION = precision
+    global _PRECISION
+    _PRECISION = precision
