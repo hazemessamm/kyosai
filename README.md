@@ -17,15 +17,12 @@ Deep Learning library based on JAX and inspired from Keras
 > Example:
 
 ```python
-import models
-import layers
-import numpy as np
+import kerax
+from kerax import layers
 from jax import numpy as jnp
-from optimizers import optimizers
-from utils import to_categorical
-from jax import nn
-
+from kerax.utils import to_categorical
 from tensorflow.keras.datasets import mnist
+
 (x_train, y_train), (x_test, y_test) = mnist.load_data()
 x_train = x_train.astype('float32')
 x_train /= 255.0
@@ -38,23 +35,24 @@ y_train = y_train.astype('float32')
 y_train = to_categorical(y_train, 10)
 
 
-inputs = core.Input((28,28,1))
-conv1 = layers.Conv2D(64,3, activation='relu')(inputs)
-conv2 = layers.Conv2D(128,3, activation='relu')(conv1)
-flatten = layers.Flatten()(conv2)
-dense = layers.Dense(512, activation='relu')(flatten)
-output = layers.Dense(10, activation='softmax')(dense)
+#This model is just a toy model for testing that everything works
+inputs = Input((28, 28, 1))
+conv1 = Conv2D(64, 3, activation=activations.ReLU, key=PRNGKey(100))(inputs)
+act1 = Activation('relu')(conv1)
+conv3 = Conv2D(128, 3, padding='same', key=PRNGKey(104))(act1)
+act2 = Activation('relu')(conv3)
+conv4 = Conv2D(128, 3, padding='same', key=PRNGKey(105))(act2)
+flatten = Flatten()(conv4)
+dense1 = Dense(512, activation='relu')(flatten)
+dense2 = Dense(10, activation='softmax')(dense1)
 
-model = models.Model(inputs, output)
-
-def loss(params, x, y):
-    preds = model.call_with_external_weights(x, params)
-    return jnp.mean(-jnp.log(preds[y]))
-
-model.compile(loss=loss, optimizer='adam')
+model = kerax.Model(inputs, output)
 
 
-model.fit(x_train, y_train, epochs=40, batch_size=64, validation_data=(x_test, y_test))
+model.compile(loss='categorical_crossentropy', optimizer='adam')
+
+
+model.fit(x_train, y_train, epochs=40, batch_size=64)
 
 ```
 ---
