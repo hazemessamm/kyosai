@@ -1,17 +1,15 @@
 from __future__ import absolute_import
 from kerax import optimizers
 from jax import numpy as jnp #type: ignore
-from kerax import layers
 from kerax import losses
 from tqdm import tqdm, trange
 from kerax.engine.data_adapter import TensorLikeDataAdapter #type: ignore
 from kerax.engine.graph import Graph
-from kerax.engine.trackable import Trackable
+from kerax.engine import Trackable
 from kerax.layers.core import Layer
 
 
-
-class Model:
+class Model(Trackable):
     '''
     Model class
     input_layer: takes the input layer
@@ -24,8 +22,8 @@ class Model:
             'outputs',
             'name'
         }
-    def __init__(self, *args, **kwargs):        
-        self.name = kwargs.pop('name', self.__class__.__name__)
+    def __init__(self, *args, **kwargs):
+        super(Model, self).__init__(self.__class__.__name__ if kwargs.get('name') is None else kwargs.get('name'))
         #Aliases
         self.predict = self.__call__
         self.predict_with_external_weights = self.call_with_external_weights

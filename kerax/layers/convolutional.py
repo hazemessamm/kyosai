@@ -3,6 +3,7 @@ from jax.experimental import stax #type: ignore
 from jax.random import PRNGKey #type: ignore
 from .core import Layer
 from jax import numpy as jnp
+from jax import lax
 
 class Conv2D(Layer):
     '''
@@ -25,8 +26,8 @@ class Conv2D(Layer):
     '''
     def __init__(self, filters, kernel_size, 
                  strides=(1,1), padding='valid', activation=None, 
-                 kernel_initializer='glorot_uniform', bias_initializer='normal', 
-                 key=PRNGKey(100), input_dim_order="NHWC", 
+                 kernel_initializer='glorot_uniform', bias_initializer='normal',
+                 use_bias=False, key=PRNGKey(100), input_dim_order="NHWC", 
                  kernel_dim_order="HWIO", output_dim_order="NHWC", 
                  trainable=True, 
                  name=None, **kwargs):
@@ -39,6 +40,7 @@ class Conv2D(Layer):
         self.kernel_initializer = self.get_initializer(kernel_initializer)
         self.bias_initializer = self.get_initializer(bias_initializer)
         self.built = False
+        self.use_bias = use_bias
         self.dimension_numbers = (input_dim_order, kernel_dim_order, output_dim_order)
         self._validate_init()
         #self.apply_fn = jit(self.apply_fn)
@@ -49,61 +51,86 @@ class Conv2D(Layer):
     @property
     def kernel_shape(self):
         'Returns the kernel dimensions'
-        return self._kernel_shape
+        return self.kernel_weights.shape
 
     @property
     def bias_shape(self):
         'Returns the bias dimensions'
-        return self._bias_shape
+        if self.use_bias:
+            return self.bias_weights.shape
+        else:
+            raise Exception('Bias is turned OFF, set use_bias=True in the constructor to use it')
+
+    @property
+    def params(self):
+        if self.use_bias:
+            return (self.kernel_weights.get_weights(), self.bias_weights.get_weights())
+        else:
+            return (self.kernel_weights.get_weights(),)
+
+    @property
+    def output_shape(self):
+        if self.built:
+            return lax.conv_general_shape_tuple(self.input_shape, self.kernel_weights.shape, self.strides, self.padding, self.dimension_numbers)
+        else:
+            raise Exception(f"{self.name} is not built yet, use call() or build() to build it.")
+
+    def compute_kernel_shape(self, input_shape):
+        return (*self.kernel_size, input_shape[-1], self.filters)
+    
+    def compute_bias_shape(self):
+        return (self.filters,)
 
     def _validate_init(self):
         if isinstance(self.strides, int):
             self.strides = (self.strides, self.strides)
         elif isinstance(self.strides, tuple) and len(self.strides) == 1:
-            self.strides += self.strides
+            self.strides *= 2
 
         if isinstance(self.kernel_size, int):
             self.kernel_size = (self.kernel_size, self.kernel_size)
         elif isinstance(self.kernel_size, tuple) and len(self.kernel_size) == 1:
-            self.kernel_size += self.kernel_size
+            self.kernel_size *= 2
 
     def build(self, input_shape):
         'Initializes the Kernel and stores the Conv2D weights'
         if len(input_shape) == 3:
-            input_shape = (None,*input_shape)
-        elif len(input_shape) < 3:
-            raise Exception(f'Expected input shape to be 3 dimensions (Height, Width, Channels), found {len(input_shape)} dimensions')
-        elif len(input_shape) > 3:
-            input_shape = (None, *input_shape[1:])
+            input_shape = (1, *input_shape)
+        else:
+            raise Exception(f'Expected input_shape with tuple length = 3, found {input_shape} which has size {len(input_shape)}')
         
-        init_fn, self.apply_fn = stax.GeneralConv(dimension_numbers=self.dimension_numbers, 
-        filter_shape=self.kernel_size, padding=self.padding, out_chan=self.filters, W_init=self.kernel_initializer, b_init=self.bias_initializer)
-        self._check_jit()
-        #initializes the conv layer
-        self.shape, self._params = init_fn(input_shape=input_shape, rng=self.key)
+        kernel_shape = self.compute_kernel_shape(input_shape)
+        self.kernel_weights = self.add_weight(self.key, kernel_shape, self.kernel_initializer, f'{self.name}_kernel', self.trainable)
+        if self.use_bias:
+            bias_shape = self.compute_bias_shape()
+            self.bias_weights = self.add_weight(self.key, bias_shape, self.bias_initializer, f'{self.name}_bias', self.trainable)
+
         self.input_shape = input_shape
-        self._kernel_shape = self._params[0].shape
-        self._bias_shape = self._params[1].shape
+        self.dn = lax.conv_dimension_numbers(input_shape, self.kernel_shape, self.dimension_numbers)
         self.built = True
 
-    def call(self, inputs):
-        'Used during training to pass the parameters while getting the gradients'
-        self.output = self.apply_fn(self._params, inputs)
+    def convolution_op(self, inputs):
+        output = lax.conv_general_dilated(inputs, self.kernel_weights.get_weights(), self.strides, self.padding, dimension_numbers=self.dn)
+        if self.use_bias:
+            output = jnp.add(output, self.bias_weights.get_weights())
+        return output
+
+    def call(self, inputs, **kwargs):
+        self.output = self.convolution_op(inputs)
         if self.activation:
             self.output = self.activation(self.output)
         return self.output
 
-    def call_with_external_weights(self, params, inputs):
+    def call_with_external_weights(self, params, inputs, **kwargs):
         self.output =  self.apply_fn(params=params, inputs=inputs)
         if self.activation:
             self.output = self.activation(self.output)
         return self.output
-
     
     def __call__(self, inputs, **kwargs):
         if not hasattr(inputs, 'shape'):
             raise Exception("Inputs should be tensors, or use Input layer for configuration")
-        #here it takes the previous layer to build the current layer
+        # It takes the previous layer to build the current layer
         if self.in_construction_mode(inputs):
             self.build(inputs.shape)
             #General function used to connect with the previous layer
@@ -156,10 +183,14 @@ class MaxPool2D(Layer):
         elif isinstance(self.strides, tuple) and len(self.strides) == 1:
             self.strides += self.strides
     
+    def compute_output_shape(self):
+        pass
+
+
     def build(self, input_shape):
-        #initializing maxpool
+        # initializing maxpool
         init_fn, self.apply_fn = stax.MaxPool(window_shape=self.pool_size, padding=self.padding, strides=self.strides, spec=self.spec)
-        #returns output shape, and the params
+        # returns output shape, and the params
         self.shape, self._params = init_fn(input_shape=(1, *input_shape[1:]), rng=self.key)
         self.input_shape = input_shape
         self.shape = (None, *self.shape[1:])

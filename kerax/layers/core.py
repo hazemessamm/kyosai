@@ -1,34 +1,57 @@
-from jax._src.api import vmap
+from typing import Union
 from kerax.engine import Trackable
 from kerax.initializers import initializers
+from kerax.initializers import Initializer
 from kerax import activations
 from jax import numpy as jnp #type: ignore
 from jax import jit #type: ignore
 from jax.experimental import stax #type: ignore
-from jax.random import PRNGKey, split #type: ignore
+from jax.random import PRNGKey #type: ignore
 from kerax.layers import construction_layers
-from jaxlib.xla_extension import DeviceArray #type: ignore
 import kerax.jit as jit_execution
 
 
-class Layer:
-    def __init__(self, key=False, trainable=True, name=None):
-        #stores the layer params
-        self._params = ()
-        #Stores the previous layer
+class Weight:
+    def __init__(self, key, shape, initializer, name, trainable):
+        self.key = key
+        self.shape = shape
+        self.initializer = initializers.get(initializer)
+        self.name = name
+        self.trainable = trainable
+        self.initialized = False
+
+    def get_weights(self, reinitialize=False):
+        if self.initialized and not reinitialize:
+            return self.weights
+        self.weights = self.initializer(self.key, self.shape)
+        self.initialized = True
+        return self.weights
+
+    def set_weights(self, weights):
+        if self.initialized:
+            if self.weights.shape == weights.shape:
+                self.weights = weights
+            else:
+                raise Exception(f'New weights shape does not match the current weights shape, {self.weights.shape} != {weights.shape}')
+        else:
+            raise Exception(f'Weights are not initialized yet. Use get_weights() method to initialize the weights')
+
+    def __repr__(self) -> str:
+        return f'{self.name} with shape {self.shape}>'
+
+
+class Layer(Trackable):
+    def __init__(self, key: PRNGKey = False, trainable: bool = True, name: str = None):
+        super(Layer, self).__init__(self.__class__.__name__ if name is None else name)
+        # Stores the layer params
+        self._params = []
+        # Stores the previous layer
         self.prev = []
         self.next = []
         self.built = False
-        if key is not None:
-            if not isinstance(key, DeviceArray):
-                key = PRNGKey(key)
-            self.key, self.subkey = split(key)
+        self.key = key
         self.trainable = trainable
-        self.__name = Trackable.get_uid(self.__class__.__name__ if name is None else name)
         self.output = None
-        self.apply_fn = None 
-        self.index = Trackable.depth
-        Trackable.track_layer(self.__name, self)
 
     def _check_jit(self):
         if jit_execution.is_jit_enabled():
@@ -38,15 +61,22 @@ class Layer:
         if isinstance(layer, Layer):
             return True
 
-    @property
-    def name(self):
-        return self.__name
+    def __name__(self):
+        return self.name
 
-    def get_initializer(self, identifier):
+    @property
+    def weights(self):
+        'returns weights'
+        return self._params
+
+    def build(self, input_shape):
+        return NotImplementedError('Should be implemented in a subclass')
+
+    def get_initializer(self, identifier: Union[str, Initializer]):
         'Returns the specified initializer'
         return initializers.get(identifier)
 
-    def get_activation(self, identifier):
+    def get_activation(self, identifier: Union[str, Initializer]):
         'Returns the specified activation'
         return activations.get(identifier)
 
@@ -62,36 +92,24 @@ class Layer:
                 l.next.append(self)
         else:
             layer.next.append(self)
-        
-    
-    @property
-    def weights(self):
-        'returns weights'
-        return self._params
-    
-    @property
-    def params(self):
-        return self._params
+
+    def add_weight(self, key: PRNGKey, shape: tuple, initializer: Initializer, name: str, trainable: bool):
+        weight = Weight(key, shape, initializer, name, trainable)
+        self._params.append(weight)
+        return weight
 
     def get_weights(self):
         return self._params
 
-    def set_weights(self, new_weights):
-        if not isinstance(new_weights, tuple):
-            raise Exception(f"Weights should be inside a tuple example: (W, b), found {type(new_weights)}")
-        #looping over the current weights and the new weights
-        #checks the shape of each dimension
-        #finally stores the new weights
-        for current_p, new_p in zip(self._params, new_weights):
-            if current_p.shape != new_p.shape:
-                raise Exception(f"New weights are not compatible with the current weight shapes, {current_p.shape} != {new_p.shape}")        
-        self._params = new_weights
+    def set_weights(self, new_weights: tuple):
+        for w1, w2 in zip(self._params, new_weights):
+            w1.set_weights(w2)
 
-    def update_weights(self, new_weights):
+    def update_weights(self, new_weights: tuple):
         if self.trainable:
             self.set_weights(new_weights)
 
-    def call(params, inputs):
+    def call(params, **kwargs):
         raise NotImplementedError('This method should be implemented in Layer subclasses')
 
     def get_output(self):

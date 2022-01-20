@@ -7,7 +7,8 @@ from .core import (
     Concatenate, 
     Dropout, 
     Flatten, 
-    Input
+    Input,
+    Weight
 )
 from .convolutional import (
     Conv2D, 

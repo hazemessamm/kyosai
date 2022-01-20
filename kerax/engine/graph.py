@@ -80,23 +80,23 @@ class Graph:
         else:
             queue.append(self.output)
 
-        visited = {i.index for i in queue}
+        visited = {i.depth for i in queue}
         self.layers = [*queue]
 
         while queue:
             current_pointer = queue.popleft()
             for i in current_pointer.next:
-                if i.index not in visited:
+                if i.depth not in visited:
                     self.layers.append(i)
                     queue.append(i)
-                    visited.add(i.index)
-        self.layers = sorted(self.layers, key=lambda x: x.index)
+                    visited.add(i.depth)
+        self.layers = sorted(self.layers, key=lambda x: x.depth)
         for layer in self.layers:
             self.params.append(layer.params)
 
     def connect_layers(self):
         self.get_layers()
-        self.layers = sorted(self.layers, key=lambda x: x.index)
+        self.layers = sorted(self.layers, key=lambda x: x.depth)
 
         for layer in self.layers:
             self.connected_layers += [self.connection(layer, i) for i in layer.next]
@@ -136,3 +136,6 @@ class Graph:
     
     def __call__(self, inputs):
         return self.call(inputs)
+
+    def _create_call_function(self):
+        pass
