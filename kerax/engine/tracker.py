@@ -1,4 +1,6 @@
 
+
+
 class Trackable:
     layers = {}
     name_uids = {}
@@ -6,12 +8,12 @@ class Trackable:
     depth = 0
 
     def __init__(self, name):
-        base_class_name = self.__class__.__name__
+        base_class_name = self.__class__.__base__.__name__
         self.name = Trackable.get_uid(name)
         if base_class_name == 'Layer':
-            depth = Trackable.track_layer(self.name, self)
-            self.depth = depth
-        elif base_class_name == 'Model' or base_class_name == 'Sequential':
+            Trackable.track_layer(self.name, self)
+            self.depth = Trackable.depth
+        elif name == 'Model' or name == 'Sequential':
             Trackable.track_model(self.name, self)
 
     @staticmethod
@@ -27,7 +29,6 @@ class Trackable:
     def track_layer(layer_name, layer_instance):
         Trackable.layers[layer_name] = layer_instance
         Trackable.depth += 1
-        return Trackable.depth
 
     @staticmethod
     def reset():

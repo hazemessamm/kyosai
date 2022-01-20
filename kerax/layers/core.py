@@ -1,4 +1,5 @@
-from typing import Union
+from ast import Call
+from typing import List, Union, Callable
 from kerax.engine import Trackable
 from kerax.initializers import initializers
 from kerax.initializers import Initializer
@@ -7,28 +8,32 @@ from jax import numpy as jnp #type: ignore
 from jax import jit #type: ignore
 from jax.experimental import stax #type: ignore
 from jax.random import PRNGKey #type: ignore
-from kerax.layers import construction_layers
-import kerax.jit as jit_execution
-
+from jax import random
+import functools
+import operator as op
+from jax import lax
+from kerax import backend
+from jax.numpy import DeviceArray
 
 class Weight:
-    def __init__(self, key, shape, initializer, name, trainable):
+    def __init__(self, key: PRNGKey, shape: tuple, initializer: Initializer, dtype: str, name: str, trainable: bool):
         self.key = key
         self.shape = shape
         self.initializer = initializers.get(initializer)
         self.name = name
         self.trainable = trainable
-        self.initialized = False
+        self.dtype = dtype
+        self.built = False
 
-    def get_weights(self, reinitialize=False):
-        if self.initialized and not reinitialize:
+    def get_weights(self, rebuild: bool = False):
+        if self.built and not rebuild:
             return self.weights
-        self.weights = self.initializer(self.key, self.shape)
-        self.initialized = True
+        self.weights = self.initializer(self.key, self.shape, self.dtype)
+        self.built = True
         return self.weights
 
-    def set_weights(self, weights):
-        if self.initialized:
+    def set_weights(self, weights: DeviceArray):
+        if self.built:
             if self.weights.shape == weights.shape:
                 self.weights = weights
             else:
@@ -41,7 +46,7 @@ class Weight:
 
 
 class Layer(Trackable):
-    def __init__(self, key: PRNGKey = False, trainable: bool = True, name: str = None):
+    def __init__(self, key: PRNGKey = False, trainable: bool = True, dtype: str = 'float32', name: str = None):
         super(Layer, self).__init__(self.__class__.__name__ if name is None else name)
         # Stores the layer params
         self._params = []
@@ -52,10 +57,7 @@ class Layer(Trackable):
         self.key = key
         self.trainable = trainable
         self.output = None
-
-    def _check_jit(self):
-        if jit_execution.is_jit_enabled():
-            self.apply_fn = jit(self.apply_fn)
+        self.dtype = dtype or backend.precision()
 
     def in_construction_mode(self, layer):
         if isinstance(layer, Layer):
@@ -69,7 +71,15 @@ class Layer(Trackable):
         'returns weights'
         return self._params
 
-    def build(self, input_shape):
+    @functools.cached_property
+    def params(self):
+        return tuple(param.get_weights() for param in self._params)
+
+    @property
+    def named_params(self):
+        return {param.name: param.get_weights for param in self._params}
+
+    def build(self, input_shape: tuple):
         return NotImplementedError('Should be implemented in a subclass')
 
     def get_initializer(self, identifier: Union[str, Initializer]):
@@ -93,8 +103,8 @@ class Layer(Trackable):
         else:
             layer.next.append(self)
 
-    def add_weight(self, key: PRNGKey, shape: tuple, initializer: Initializer, name: str, trainable: bool):
-        weight = Weight(key, shape, initializer, name, trainable)
+    def add_weight(self, key: PRNGKey, shape: tuple, initializer: Initializer, dtype: str, name: str, trainable: bool):
+        weight = Weight(key, shape, initializer, dtype, name, trainable)
         self._params.append(weight)
         return weight
 
@@ -106,8 +116,10 @@ class Layer(Trackable):
             w1.set_weights(w2)
 
     def update_weights(self, new_weights: tuple):
-        if self.trainable:
-            self.set_weights(new_weights)
+        if self.trainable and len(new_weights) > 0:
+            for w1, w2 in zip(self._params, new_weights):
+                if w1.trainable:
+                    w1.set_weights(w2)
 
     def call(params, **kwargs):
         raise NotImplementedError('This method should be implemented in Layer subclasses')
@@ -117,7 +129,6 @@ class Layer(Trackable):
             raise Exception('This layer does not have an output yet, call method should be called')
         return self.output
 
-
 class Input(Layer):
     '''
     Input Layer that stores the training data and returns batches from it 
@@ -126,8 +137,8 @@ class Input(Layer):
     '''
 
 
-    def __init__(self, shape=None, name=None):
-        super().__init__(key=None, trainable=False, name=name)
+    def __init__(self, shape: tuple = None, dtype: str = 'float32', name: str = None):
+        super().__init__(key=None, trainable=False, dtype=dtype, name=name)
         if not shape or not isinstance(shape, tuple):
             raise Exception(f'shape should have value in a tuple, found {shape} with type {type(shape)}')
         self._shape = shape
@@ -136,13 +147,12 @@ class Input(Layer):
     def shape(self):
         return self._shape
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: DeviceArray):
         if self.in_construction_mode(inputs):
             self.connect(inputs)
         else:
             self.output = inputs
             return self.output
-    
 
     def __repr__(self):
         return "<Input Layer>"
@@ -160,28 +170,18 @@ class Dense(Layer):
     bias_initializer: stores the bias initializer, default "normal"
 
     '''
-    def __init__(self, units, activation=None, kernel_initializer='glorot_normal', bias_initializer='normal', trainable=True, key=PRNGKey(100), **kwargs):
+    def __init__(self, units: int, activation: Union[str, Callable] = None, kernel_initializer: Union[str, Callable] = 'glorot_normal', 
+    bias_initializer: Union[str, Callable] = 'normal', use_bias: bool = True, trainable: bool = True, key: PRNGKey = PRNGKey(100), **kwargs):
         super(Dense, self).__init__(key=key, trainable=trainable)
         self.units = units
         self.activation = self.get_activation(activation)
         self.kernel_initializer = self.get_initializer(kernel_initializer)
         self.bias_initializer = self.get_initializer(bias_initializer)
+        self.use_bias = use_bias
 
         input_shape = kwargs.pop('input_shape', False)
         if input_shape:
             self.build(input_shape=input_shape)
-    
-    @property
-    def kernel_shape(self):
-        return self._kernel_shape
-
-    @property
-    def bias_shape(self):
-        return self._bias_shape
-
-    @property
-    def output_shape(self):
-        return self._shape
     
     @property
     def input_shape(self):
@@ -189,43 +189,54 @@ class Dense(Layer):
 
     @property
     def shape(self):
-        return self._shape
+        return (1, self.units)
 
-    def build(self, input_shape):
-        init_fn, self.apply_fn = stax.Dense(self.units, W_init=self.kernel_initializer, b_init=self.bias_initializer)
-        self._check_jit()
-        self._shape, self._params = init_fn(rng=self.key, input_shape=input_shape)
-        self._input_shape = input_shape
-        self._kernel_shape = self._params[0].shape
-        self._bias_shape = self._params[0].shape
+    def compute_kernel_shape(self):
+        return self.kernel_weights.shape
+
+    def compute_bias_shape(self):
+        return self.bias_weights.shape
+
+    def compute_output_shape(self):
+        return (1, self.units)
+
+    def build(self, input_shape: tuple):
+        self._input_shape = (input_shape[-1],)
+        k1, k2 = random.split(self.key)
+        self.kernel_weights = self.add_weight(k1, (input_shape[-1], self.units), self.kernel_initializer, self.dtype, f'{self.name}_kernel', trainable=self.trainable)
+        if self.use_bias:
+            self.bias_weights = self.add_weight(k2, (self.units,), self.bias_initializer, f'{self.name}_bias', trainable=self.trainable)
         self.built = True
 
-    def call_with_external_weights(self, params, inputs):
-        self.output = self.apply_fn(params, inputs)
+    def dense_op(self, params: tuple, inputs: DeviceArray):
+        out = lax.batch_matmul(inputs, params[0])
+        if self.use_bias:
+            out = jnp.add(out, params[1])
+        return out
+
+    def call_with_external_weights(self, params: tuple, inputs: DeviceArray):
+        self.output = self.dense_op(params, inputs)
         if self.activation:
             self.output = self.activation(self.output)
         return self.output
 
-    def call(self, inputs):
+    def call(self, inputs: DeviceArray):
         'Used during training to pass the parameters while getting the gradients'
-        self.output = self.apply_fn(self._params, inputs)
+        self.output = self.dense_op(self.params, inputs)
         if self.activation:
             self.output = self.activation(self.output)
         return self.output
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Union[Layer, DeviceArray]):
         if not hasattr(inputs, 'shape'):
-            raise Exception("Inputs should be tensors, or use Input layer for configuration")
+            raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
         if self.in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)
             return self
         else:
             self.build(inputs.shape)
-            if self.input_shape != inputs.shape:
-                raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
-            else:
-                return self.call(inputs)
+            return self.call(inputs)
 
     def __repr__(self):
         if self.built:
@@ -240,42 +251,40 @@ class Flatten(Layer):
     key: Pseudo Random Generator Key, default PRNGKey(1)
 
     '''
-    def __init__(self, key=PRNGKey(1)):
-        super(Flatten, self).__init__(key=key)
+    def __init__(self):
+        super(Flatten, self).__init__(key=None, trainable=False)
 
-    @property
-    def output_shape(self):
-        return self._shape
-    
     @property
     def input_shape(self):
         return self._input_shape
-    
-    @property
-    def shape(self):
-        return self._shape
 
-    def build(self, input_shape):
-        #initializes flatten layer
-        #returns initialization function and apply function
-        init_fn, self.apply_fn = stax.Flatten
-        self._check_jit()
-        self._shape, self._params = init_fn(input_shape=input_shape, rng=self.key)
+    @property
+    def compute_output_shape(self):
+        return (self.input_shape[0], functools.reduce(op.mul, self.input_shape[1:], 1))
+
+    @functools.cached_property
+    def shape(self):
+        return (functools.reduce(op.mul, self.input_shape[1:], 1),)
+
+    def build(self, input_shape: tuple):
         self._input_shape = input_shape
         self.built = True
 
-    def call_with_external_weights(self, params, inputs):
-        self.output =  self.apply_fn(params=params, inputs=inputs)
+    def flatten_op(self, params: tuple, inputs: DeviceArray):
+        return lax.reshape(inputs, (inputs.shape[0], *self.shape))
+
+    def call_with_external_weights(self, params: tuple, inputs: DeviceArray):
+        self.output =  self.flatten_op(params, inputs)
         return self.output
 
-    def call(self, inputs):
+    def call(self, inputs: DeviceArray, **kwargs):
         'Used during training to pass the parameters while getting the gradients'
-        self.output = self.apply_fn(inputs=inputs, params=self._params)
+        self.output = self.flatten_op(self.params, inputs)
         return self.output
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Union[Layer, DeviceArray]):
         if not hasattr(inputs, 'shape'):
-            raise Exception("Inputs should be tensors, or use Input layer for configuration")
+            raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
         if self.in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)
@@ -301,53 +310,47 @@ class Dropout(Layer):
     training: stores the mode of the layer, accepts boolean
     key: Pseudo Random Generator Key, default PRNGKey(1)
     '''
-    def __init__(self, rate, key=PRNGKey(1)):
+    def __init__(self, rate: float, key: PRNGKey = PRNGKey(1)):
         super(Dropout, self).__init__(key=key)
         self.rate = rate
         self.key = key
     
     @property
-    def output_shape(self):
-        return self._shape
+    def compute_output_shape(self):
+        return self._input_shape
     
     @property
     def input_shape(self):
         return self._input_shape
 
     @property
-    def kernel_shape(self):
-        return self._kernel_shape
-    
-    @property
-    def bias_shape(self):
-        return self._bias_shape
+    def shape(self):
+        return self._input_shape
 
-
-    def build(self, input_shape):
-        init_fn, self.apply_fn = stax.Dropout(rate=self.rate, mode='train')
-        self._check_jit()
-        self._shape, self._params = init_fn(rng=self.key, input_shape=input_shape)
+    def build(self, input_shape: tuple):
         self._input_shape = input_shape
-        self._kernel_shape = self._params[0].shape
-        self._bias_shape = self._params[-1].shape
         self.built = True
 
-    def call(self, inputs, **kwargs):
+    def dropout_op(self, params: tuple, inputs: DeviceArray):
+        keep = random.bernoulli(self.key, self.rate, inputs.shape)
+        return jnp.where(keep, inputs / self.rate, 0)
+
+    def call(self, inputs: DeviceArray, **kwargs):
         'Used during training to pass the parameters while getting the gradients'
         training = kwargs.get('training', False)
         if training:
-            self.output = self.apply_fn(params=self._params, inputs=inputs)
+            self.output = self.dropout_op(self.params, inputs)
         else:
             self.output = inputs
         return self.output
     
-    def call_with_external_weights(self, params, inputs):
-        self.output =  self.apply_fn(params=params, inputs=inputs)
+    def call_with_external_weights(self, params: tuple, inputs: DeviceArray):
+        self.output = self.dropout_op(params, inputs)
         return self.output
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Union[Layer, DeviceArray]):
         if not hasattr(inputs, 'shape'):
-            raise Exception("Inputs should be tensors, or use Input layer for configuration")
+            raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
         
         if self.in_construction_mode(inputs):
             self.build(inputs.shape)
@@ -367,32 +370,45 @@ class Activation(Layer):
     params:
     identifier: accepts the activation function as a string or callable
     '''
-    def __init__(self, identifier):
+    def __init__(self, identifier: Union[str, Callable]):
         super(Activation, self).__init__(key=0)
         self._identifier = identifier
-    
 
     @property
-    def activation(self):
+    def identifier(self):
         return self._identifier
 
-    def build(self, input_shape):
-        init_fn, self.apply_fn = construction_layers.Activation(self._identifier)
-        self.shape, self._params = init_fn(input_shape)
-        self.input_shape = self.shape
-        self.built=True
+    @property
+    def input_shape(self):
+        return self._input_shape
 
-    def call(self, inputs):
-        self.output = self.apply_fn(self._params, inputs)
+    @property
+    def output_shape(self):
+        return self._output_shape
+
+    @property
+    def shape(self):
+        return self._output_shape
+    
+    def activation_op(self, params: tuple, inputs: DeviceArray):
+        return self.activation(inputs)
+
+    def build(self, input_shape: tuple):
+        self._output_shape, self._input_shape = input_shape, input_shape
+        self.activation = activations.get(self._identifier)
+        self.built = True
+
+    def call(self, inputs: DeviceArray, **kwargs):
+        self.output = self.activation_op(self.params, inputs)
         return self.output
 
-    def call_with_external_weights(self, params, inputs):
-        self.output =  self.apply_fn(params=params, inputs=inputs)
+    def call_with_external_weights(self, params: tuple, inputs: DeviceArray):
+        self.output =  self.activation_op(params, inputs)
         return self.output
 
-    def __call__(self, inputs, **kwargs):
+    def __call__(self, inputs: Union[Layer, DeviceArray], **kwargs):
         if not hasattr(inputs, 'shape'):
-            raise Exception("Inputs should be tensors, or use Input layer for configuration")
+            raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
         if self.in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)
@@ -410,30 +426,43 @@ class Activation(Layer):
 
 
 class Concatenate(Layer):
-    def __init__(self, layers, axis=-1, name=None):
+    def __init__(self, layers: List[Layer], axis: int = -1, name: str = None):
         super(Concatenate, self).__init__(name=name)
         self.axis = axis
         self.layers = layers
 
-    def build(self, input_shape):
-        self.params = ()
-        self.shape = input_shape
+    @property
+    def shape(self):
+        return self._output_shape
+
+    @property
+    def output_shape(self):
+        return self._output_shape
+
+    @property
+    def input_shape(self):
+        return self._input_shape
+
+    def build(self, input_shape: tuple):
+        self._output_shape = input_shape
+        self._input_shape = input_shape
         self.built = True
-        self.input_shape = input_shape
     
-    def call(self, inputs):
-        self.output = self.layers[0].get_output()
-        for layer in self.layers[1:]:
-            self.output = jnp.concatenate((self.output, layer.get_output()), axis=self.axis)
+    def concatenate_op(self, params: tuple, inputs: DeviceArray):
+        return jnp.concatenate(inputs, axis=self.axis)
+
+    def call(self, inputs: DeviceArray,  **kwargs):
+        layer_outputs = tuple(out.get_output() for out in self.layers)
+        self.output = self.concatenate_op(self.params, layer_outputs)
         return self.output
 
-    def call_with_external_weights(self, params, inputs):
-        self.output =  self.apply_fn(params=params, inputs=inputs)
+    def call_with_external_weights(self, params: tuple, inputs: DeviceArray):
+        self.output = self.concatenate_op(params, inputs)
         return self.output
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Union[Layer, DeviceArray]):
         if not hasattr(inputs, 'shape'):
-            raise Exception("Inputs should be tensors, or use Input layer for configuration")
+            raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
         if self.in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)
@@ -445,50 +474,48 @@ class Concatenate(Layer):
             else:
                 return self.call(inputs)
 
-
-#TODO: Implmenet Add layer and BatchNorm layer
 class Add(Layer):
     """
     Still working on it
     """
-    def __init__(self, name=None):
+    def __init__(self, name: str = None):
         super(Add, self).__init__(name=name)
 
     @property
     def shape(self):
-        return self._shape
+        return self._output_shape
     
     @property
     def input_shape(self):
         return self._input_shape
 
+    @property
+    def compute_output_shape(self):
+        return self._output_shape
 
-    def build(self, input_shape):
-        init_fn, self.apply_fn = construction_layers.Add()
-        self._shape, self._params = init_fn(input_shape, self.key)
-        self._input_shape = self.shape
+    def add_op(self, params: tuple, inputs: DeviceArray):
+        input_1, input_2 = inputs
+        return lax.add(input_1, input_2)
+
+    def build(self, input_shape: tuple):
+        self._input_shape, self._output_shape = input_shape, input_shape
         self.built = True
 
-    def call_with_external_weights(self, params, inputs):
+    def call_with_external_weights(self, params: tuple, inputs: DeviceArray):
         out = inputs[0]
         for _input in inputs[1:]:
-            out = self.apply_fn(params, out, _input)
+            out = self.add_op(params, (out, _input))
         self.output = out
         return self.output
 
-    def call(self, inputs):
-        # self.output = self.prev[0].get_output()
-        # for layer in self.prev[1:]:
-        #     self.output = self.apply_fn(self._params, self.output, layer.get_output())
-        # return self.output
+    def call(self, inputs: DeviceArray):
         output = inputs[0]
-        for _input in inputs[1:]:
-            output = self.apply_fn(self._params, output, _input)
-        
+        for current_input in inputs[1:]:
+            output = self.add_op(self._params, (output, current_input))
         self.output = output
         return self.output
 
-    def __call__(self, inputs, params=None):
+    def __call__(self, inputs: Union[Layer, DeviceArray]):
         if isinstance(inputs, list) and all(
             isinstance(cur_input, Layer) for cur_input in inputs
         ):
@@ -507,29 +534,29 @@ class Add(Layer):
             return "<Add layer>"
 
 class BatchNormalization(Layer):
-    def __init__(self, key=PRNGKey(100), trainable=True, axis=-1, name=None):
+    def __init__(self, key: PRNGKey = PRNGKey(100), trainable: bool = True, axis: int = -1, name: str = None):
         super(BatchNormalization, self).__init__(key=key, trainable=trainable)
         self.axis = axis
         self.name = name
     
-    def build(self, input_shape):
+    def build(self, input_shape: tuple):
         init_fun, self.apply_fn = stax.BatchNorm(axis=self.axis)
         self._check_jit()
         self.shape, self._params = init_fun(rng=self.key, input_shape=input_shape)
         self.input_shape = self.shape
         self.built = True
     
-    def call(self, inputs):
+    def call(self, inputs: DeviceArray):
         self.output = self.apply_fn(params=self._params, x=inputs)
         return self.output
 
-    def call_with_external_weights(self, params, inputs):
+    def call_with_external_weights(self, params: tuple, inputs: DeviceArray):
         self.output = self.apply_fn(params=params, inputs=inputs)
         return self.output
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Union[Layer, DeviceArray]):
         if not hasattr(inputs, 'shape'):
-            raise Exception("Inputs should be tensors, or use Input layer for configuration")
+            raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
         if self.in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)

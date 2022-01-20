@@ -6,7 +6,7 @@ class InitializerNotFoundException(Exception):
         return 'InitializerNotFoundException'
 
 class Initializer:
-    def __call__(self, shape, dtype=None, **kwargs):
+    def __call__(self, key, shape, dtype=None, **kwargs):
         raise NotImplementedError
 
     def get_config(self):

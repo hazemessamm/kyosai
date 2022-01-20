@@ -35,6 +35,10 @@ class Model(Trackable):
         self.initialize_graph(*args, **kwargs)
 
     @property
+    def __name__(self):
+        return self.name
+
+    @property
     def layers(self):
         if self._sequential_model:
             return self._layers
@@ -99,8 +103,8 @@ class Model(Trackable):
 
     def train_step(self, x, y):
         'Returns loss value and takes training batch'
-        loss = self.loss_fn(self.graph.params, x, y)
-        grads = self.optimizer.get_gradients(x, y)
+        # loss = self.loss_fn(self.graph.params, x, y)
+        loss, grads = self.optimizer.get_gradients(x, y)
         self.optimizer.apply_gradients(grads)
         return loss
 

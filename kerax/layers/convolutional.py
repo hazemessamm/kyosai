@@ -1,9 +1,11 @@
-from jax import vmap
-from jax.experimental import stax #type: ignore
+from typing import Callable, Union
+from jax import jit, random, vmap
 from jax.random import PRNGKey #type: ignore
 from .core import Layer
+from jax.numpy import DeviceArray
 from jax import numpy as jnp
 from jax import lax
+from jax._src.lax.convolution import ConvDimensionNumbers
 
 class Conv2D(Layer):
     '''
@@ -24,13 +26,13 @@ class Conv2D(Layer):
         - output_dim_order: stores the order of the dimensions, default NHWC
 
     '''
-    def __init__(self, filters, kernel_size, 
-                 strides=(1,1), padding='valid', activation=None, 
-                 kernel_initializer='glorot_uniform', bias_initializer='normal',
-                 use_bias=False, key=PRNGKey(100), input_dim_order="NHWC", 
-                 kernel_dim_order="HWIO", output_dim_order="NHWC", 
-                 trainable=True, 
-                 name=None, **kwargs):
+    def __init__(self, filters: int, kernel_size: Union[int, tuple], 
+                 strides: Union[int, tuple] = (1,1), padding: str = 'valid', activation: Union[str, Callable] = None, 
+                 kernel_initializer: Union[str, Callable] ='glorot_uniform', bias_initializer: Union[str, Callable] ='normal',
+                 use_bias: bool = False, key: PRNGKey = PRNGKey(100), input_dim_order: str = "NHWC", 
+                 kernel_dim_order: str = "HWIO", output_dim_order: str = "NHWC", 
+                 trainable: bool = True, 
+                 name: str = None, **kwargs):
         super(Conv2D, self).__init__(key=key, trainable=trainable, name=name)
         self.filters = filters
         self.kernel_size = kernel_size
@@ -43,8 +45,7 @@ class Conv2D(Layer):
         self.use_bias = use_bias
         self.dimension_numbers = (input_dim_order, kernel_dim_order, output_dim_order)
         self._validate_init()
-        #self.apply_fn = jit(self.apply_fn)
-        shape = kwargs.pop('shape', False) or kwargs.pop('input_shape', False)
+        shape = kwargs.get('shape', False) or kwargs.pop('input_shape', False)
         if shape:
             self.build(shape)
     
@@ -61,21 +62,17 @@ class Conv2D(Layer):
         else:
             raise Exception('Bias is turned OFF, set use_bias=True in the constructor to use it')
 
-    @property
-    def params(self):
-        if self.use_bias:
-            return (self.kernel_weights.get_weights(), self.bias_weights.get_weights())
-        else:
-            return (self.kernel_weights.get_weights(),)
-
-    @property
-    def output_shape(self):
+    def compute_output_shape(self):
         if self.built:
             return lax.conv_general_shape_tuple(self.input_shape, self.kernel_weights.shape, self.strides, self.padding, self.dimension_numbers)
         else:
             raise Exception(f"{self.name} is not built yet, use call() or build() to build it.")
 
-    def compute_kernel_shape(self, input_shape):
+    @property
+    def shape(self):
+        return self.compute_output_shape()
+
+    def compute_kernel_shape(self, input_shape: tuple):
         return (*self.kernel_size, input_shape[-1], self.filters)
     
     def compute_bias_shape(self):
@@ -92,44 +89,42 @@ class Conv2D(Layer):
         elif isinstance(self.kernel_size, tuple) and len(self.kernel_size) == 1:
             self.kernel_size *= 2
 
-    def build(self, input_shape):
+    def build(self, input_shape: tuple):
         'Initializes the Kernel and stores the Conv2D weights'
         if len(input_shape) == 3:
             input_shape = (1, *input_shape)
-        else:
-            raise Exception(f'Expected input_shape with tuple length = 3, found {input_shape} which has size {len(input_shape)}')
-        
+        k1, k2 = random.split(self.key)
         kernel_shape = self.compute_kernel_shape(input_shape)
-        self.kernel_weights = self.add_weight(self.key, kernel_shape, self.kernel_initializer, f'{self.name}_kernel', self.trainable)
+        self.kernel_weights = self.add_weight(k1, kernel_shape, self.kernel_initializer, f'{self.name}_kernel', self.trainable)
         if self.use_bias:
             bias_shape = self.compute_bias_shape()
-            self.bias_weights = self.add_weight(self.key, bias_shape, self.bias_initializer, f'{self.name}_bias', self.trainable)
+            self.bias_weights = self.add_weight(k2, bias_shape, self.bias_initializer, f'{self.name}_bias', self.trainable)
 
         self.input_shape = input_shape
         self.dn = lax.conv_dimension_numbers(input_shape, self.kernel_shape, self.dimension_numbers)
         self.built = True
 
-    def convolution_op(self, inputs):
-        output = lax.conv_general_dilated(inputs, self.kernel_weights.get_weights(), self.strides, self.padding, dimension_numbers=self.dn)
+    def convolution_op(self, params: tuple, inputs: DeviceArray):
+        output = lax.conv_general_dilated(inputs, params[0], self.strides, self.padding, dimension_numbers=self.dn)
         if self.use_bias:
-            output = jnp.add(output, self.bias_weights.get_weights())
+            output = jnp.add(output, params[1])
         return output
 
-    def call(self, inputs, **kwargs):
-        self.output = self.convolution_op(inputs)
+    def call(self, inputs: DeviceArray, **kwargs):
+        self.output = self.convolution_op(self.params, inputs)
         if self.activation:
             self.output = self.activation(self.output)
         return self.output
 
-    def call_with_external_weights(self, params, inputs, **kwargs):
-        self.output =  self.apply_fn(params=params, inputs=inputs)
+    def call_with_external_weights(self, params: tuple, inputs: DeviceArray, **kwargs):
+        self.output =  self.convolution_op(params, inputs)
         if self.activation:
             self.output = self.activation(self.output)
         return self.output
     
-    def __call__(self, inputs, **kwargs):
+    def __call__(self, inputs: Union[Layer, DeviceArray], **kwargs):
         if not hasattr(inputs, 'shape'):
-            raise Exception("Inputs should be tensors, or use Input layer for configuration")
+            raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
         # It takes the previous layer to build the current layer
         if self.in_construction_mode(inputs):
             self.build(inputs.shape)
@@ -138,12 +133,12 @@ class Conv2D(Layer):
             #returns the current layer
             return self
         else:
-            #if the inputs are tensors and the function it will be built and continue apply conv to it
+            # if the inputs are tensors and the function it will be built and continue apply conv to it
             if not self.built:
                 self.build(inputs.shape)
 
             if self.input_shape[-3:] != inputs.shape[-3:] and len(self.input_shape) == 4:
-                raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
+                raise Exception(f"Error in layer {self.name}, Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
             else:
                 return self.call(inputs)
 
@@ -164,13 +159,13 @@ class MaxPool2D(Layer):
         - key: stores Pseudo Random Generator Key, default PRNGKey(1)
     '''
 
-    def __init__(self, pool_size=(2,2), strides=None, padding='valid', spec=None, key=PRNGKey(1)):
-        super(MaxPool2D, self).__init__(key=key)
+    def __init__(self, pool_size: Union[int, tuple] = (2,2), strides: Union[int, tuple] = (2,2), padding: str = 'valid', spec: ConvDimensionNumbers = None, key: PRNGKey = PRNGKey(1)):
+        super(MaxPool2D, self).__init__(key=key, trainable=False)
         self.pool_size = pool_size
         self.strides = strides
         self.padding = padding
         self.spec = spec
-        self._validate_init()
+        self.trainable = False
         
     def _validate_init(self):
         if isinstance(self.pool_size, int):
@@ -184,30 +179,36 @@ class MaxPool2D(Layer):
             self.strides += self.strides
     
     def compute_output_shape(self):
-        pass
+        padding_vals = lax.padtype_to_pads(self.input_shape, self.pool_size,
+                                         self.strides, self.padding)
+        ones = (1,) * len(self.pool_size)
+        out_shape = lax.reduce_window_shape_tuple(
+            self.input_shape, self.window_shape, self.strides, padding_vals, ones, ones)
+        return out_shape
 
+    @property
+    def shape(self):
+        return self.compute_output_shape()
 
-    def build(self, input_shape):
-        # initializing maxpool
-        init_fn, self.apply_fn = stax.MaxPool(window_shape=self.pool_size, padding=self.padding, strides=self.strides, spec=self.spec)
-        # returns output shape, and the params
-        self.shape, self._params = init_fn(input_shape=(1, *input_shape[1:]), rng=self.key)
+    def build(self, input_shape: tuple):
         self.input_shape = input_shape
-        self.shape = (None, *self.shape[1:])
         self.built = True
-        self._check_jit()
 
-    def call(self, inputs):
-        self.output = self.apply_fn(self._params, inputs)
+    def maxpool_op(self, params: tuple, inputs: DeviceArray):
+        out = lax.reduce_window(inputs, -jnp.inf, lax.add, self.pool_size, self.strides, self.padding)
+        return out
+
+    def call(self, inputs: DeviceArray, **kwargs):
+        self.output = self.maxpool_op(self.params, inputs)
         return self.output
 
-    def call_with_external_weights(self, params, inputs):
-        self.output =  self.apply_fn(params=params, inputs=inputs)
+    def call_with_external_weights(self, params: tuple, inputs: DeviceArray):
+        self.output = self.maxpool_op(params, inputs)
         return self.output
 
-    def __call__(self, inputs, **kwargs):
+    def __call__(self, inputs: DeviceArray, **kwargs):
         if not hasattr(inputs, 'shape'):
-            raise Exception("Inputs should be tensors, or use Input layer for configuration")
+            raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
         if self.in_construction_mode(inputs):
             self.build(inputs.shape)
             self.connect(inputs)
@@ -218,6 +219,7 @@ class MaxPool2D(Layer):
                 raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
             else:
                 return self.apply_fn(inputs=inputs, params=self._params)
+
     def __repr__(self):
         if self.built:
             return f"<MaxPool Layer with input shape {self.input_shape} and output shape {self.shape}>"

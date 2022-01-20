@@ -18,7 +18,7 @@ class Optimizer:
         self.loss_fn = loss_fn
         self.model = model
         self.step_index = 0
-        self.loss_grad = jit(grad(loss_fn))
+        self.loss_grad = jit(value_and_grad(loss_fn))
 
     #this function should be implemented by the subclasses
 
