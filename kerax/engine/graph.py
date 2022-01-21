@@ -85,12 +85,14 @@ class Graph:
 
         while queue:
             current_pointer = queue.popleft()
-            for i in current_pointer.next:
-                if i.depth not in visited:
-                    self.layers.append(i)
-                    queue.append(i)
-                    visited.add(i.depth)
-        self.layers = sorted(self.layers, key=lambda x: x.depth)
+            for layer in current_pointer._node_container.outbound_nodes:
+                if layer.depth not in visited:
+                    self.layers.append(layer)
+                    queue.append(layer)
+                    visited.add(layer.depth)
+
+        self.layers = sorted(self.layers, key=lambda layer: layer.depth)
+        
         for layer in self.layers:
             self.params.append(layer.params)
 
@@ -113,7 +115,7 @@ class Graph:
             input_layer(arg)
 
         for layer in self.layers:
-            prevs = layer.prev
+            prevs = layer._node_container.inbound_nodes
             if not isinstance(layer, Input):
                 if len(prevs) > 1:
                     outputs = layer([prev.output for prev in prevs])
@@ -126,7 +128,7 @@ class Graph:
             input_layer(arg)
 
         for layer, param in zip(self.layers, params):
-            prevs = layer.prev
+            prevs = layer._node_container.inbound_nodes
             if not isinstance(layer, Input):
                 if len(prevs) > 1:
                     outputs = layer.call_with_external_weights(param, [prev.output for prev in prevs])

@@ -1,36 +1,57 @@
 from jax import numpy as jnp #type:ignore
 from jax import lax
 
+class Reducer:
+    def __init__(self, reduction=None):
+        self.reduction = reduction
+        if reduction == 'mean':
+            self.reduce = self.reduce_by_mean
+        elif reduction == 'sum':
+            self.reduce = self.reduce_by_sum
+        else:
+            self.reduce = lambda inputs: inputs
+
+    def reduce_by_mean(self, inputs):
+        return jnp.mean(inputs)
+    
+    def reduce_by_sum(self, inputs):
+        return jnp.sum(inputs)
+
+    def __call__(self, inputs):
+        return self.reduce(inputs)
+
 class Loss:
     def __init__(self, model, reduction=None, name=None):
-        self.reduction = reduction
+        self.reduction = Reducer(reduction)
         self.name = self.__class__.__name__ if name is None else name
         self.epsilon = 1e-12
         self.model = model
+    
+    @property
+    def __name__(self):
+        return self.name
 
     def call(self, params, x, y):
         raise NotImplementedError("Must be implemented in subclass")
     
-    def __call__(self, params, y_true, y_pred):
-        return self.call(params, y_true, y_pred)
+    def __call__(self, params, train_x, y_true):
+        return self.call(params, train_x, y_true)
     
-
     def get_config(self):
         return {'reduction': self.reduction, 'name': self.name}
 
-
 class CategoricalCrossEntropy(Loss):
-    def __init__(self, model, reduction=None, name='categorical_crossentropy'):
+    def __init__(self, model, reduction=None, name=None):
         super(CategoricalCrossEntropy, self).__init__(model, reduction, name)
     
     def call(self, params, x, y):
         y_preds = self.model.call_with_external_weights(params, x)
         y_preds = jnp.clip(y_preds, self.epsilon, 1. - self.epsilon)
         num_samples = y_preds.shape[0]
-        return -jnp.sum(y*jnp.log(y_preds+1e-9))/num_samples
+        return self.reduction(-jnp.sum(y*jnp.log(y_preds+1e-9))/num_samples)
 
 class MeanSquaredError(Loss):
-    def __init__(self, model, reduction=None, name='mean_squared_error'):
+    def __init__(self, model, reduction=None, name=None):
         super(MeanSquaredError, self).__init__(model, reduction, name)
     
     def call(self, params, x, y):
@@ -38,7 +59,7 @@ class MeanSquaredError(Loss):
         return jnp.mean(jnp.square(jnp.subtract(y_pred, y)))
     
 class MeanAbsoluteError(Loss):
-    def __init__(self, model, reduction=None, name='mean_absolute_error'):
+    def __init__(self, model, reduction=None, name=None):
         super(MeanAbsoluteError, self).__init__(model, reduction, name)
 
     def call(self, params, x, y):
@@ -47,7 +68,7 @@ class MeanAbsoluteError(Loss):
     
 
 class Huber(Loss):
-    def __init__(self, model, reduction, delta=1.0, name='huber'):
+    def __init__(self, model, reduction, delta=1.0, name=None):
         super(Huber, self).__init__(model, reduction, name)
         self.delta = delta
     
@@ -61,7 +82,7 @@ class Huber(Loss):
 
 
 class BinaryCrossEntropy(Loss):
-    def __init__(self, model, reduction=None, name='binary_crossentropy'):
+    def __init__(self, model, reduction=None, name=None):
         super(BinaryCrossEntropy, self).__init__(model, reduction, name)
     
     def call(self, params, x, y):

@@ -1,6 +1,8 @@
-from jax.experimental import optimizers #type: ignore
+from jax.example_libraries import optimizers #type: ignore
 from jax import value_and_grad, grad #type: ignore
 from jax import jit #type: ignore
+import optax
+
 
 class Optimizer:
     '''
@@ -20,8 +22,7 @@ class Optimizer:
         self.step_index = 0
         self.loss_grad = jit(value_and_grad(loss_fn))
 
-    #this function should be implemented by the subclasses
-
+    # This function should be implemented by the subclasses
     def apply_gradients(self, grads):
         raise NotImplementedError("This method should be implemented in a subclass and should not be called from the Optimizer base class")
     

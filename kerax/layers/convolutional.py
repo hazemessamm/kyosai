@@ -29,11 +29,10 @@ class Conv2D(Layer):
     def __init__(self, filters: int, kernel_size: Union[int, tuple], 
                  strides: Union[int, tuple] = (1,1), padding: str = 'valid', activation: Union[str, Callable] = None, 
                  kernel_initializer: Union[str, Callable] ='glorot_uniform', bias_initializer: Union[str, Callable] ='normal',
-                 use_bias: bool = False, key: PRNGKey = PRNGKey(100), input_dim_order: str = "NHWC", 
-                 kernel_dim_order: str = "HWIO", output_dim_order: str = "NHWC", 
-                 trainable: bool = True, 
-                 name: str = None, **kwargs):
-        super(Conv2D, self).__init__(key=key, trainable=trainable, name=name)
+                 use_bias: bool = False, key: PRNGKey = PRNGKey(100), 
+                 input_dim_order: str = "NHWC", kernel_dim_order: str = "HWIO", output_dim_order: str = "NHWC", 
+                 trainable: bool = True, dtype='float32', name: str = None, **kwargs):
+        super(Conv2D, self).__init__(key=key, trainable=trainable, dtype=dtype, name=name)
         self.filters = filters
         self.kernel_size = kernel_size
         self.strides = strides
@@ -95,12 +94,12 @@ class Conv2D(Layer):
             input_shape = (1, *input_shape)
         k1, k2 = random.split(self.key)
         kernel_shape = self.compute_kernel_shape(input_shape)
-        self.kernel_weights = self.add_weight(k1, kernel_shape, self.kernel_initializer, f'{self.name}_kernel', self.trainable)
+        self.kernel_weights = self.add_weight(k1, kernel_shape, self.kernel_initializer, self.dtype, f'{self.name}_kernel', self.trainable)
         if self.use_bias:
             bias_shape = self.compute_bias_shape()
-            self.bias_weights = self.add_weight(k2, bias_shape, self.bias_initializer, f'{self.name}_bias', self.trainable)
+            self.bias_weights = self.add_weight(k2, bias_shape, self.bias_initializer, self.dtype, f'{self.name}_bias', self.trainable)
 
-        self.input_shape = input_shape
+        self._input_shape = input_shape
         self.dn = lax.conv_dimension_numbers(input_shape, self.kernel_shape, self.dimension_numbers)
         self.built = True
 
@@ -122,25 +121,25 @@ class Conv2D(Layer):
             self.output = self.activation(self.output)
         return self.output
     
-    def __call__(self, inputs: Union[Layer, DeviceArray], **kwargs):
-        if not hasattr(inputs, 'shape'):
-            raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
-        # It takes the previous layer to build the current layer
-        if self.in_construction_mode(inputs):
-            self.build(inputs.shape)
-            #General function used to connect with the previous layer
-            self.connect(inputs)
-            #returns the current layer
-            return self
-        else:
-            # if the inputs are tensors and the function it will be built and continue apply conv to it
-            if not self.built:
-                self.build(inputs.shape)
+    # def __call__(self, inputs: Union[Layer, DeviceArray], **kwargs):
+    #     if not hasattr(inputs, 'shape'):
+    #         raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
+    #     # It takes the previous layer to build the current layer
+    #     if self.in_construction_mode(inputs):
+    #         self.build(inputs.shape)
+    #         #General function used to connect with the previous layer
+    #         self.connect(inputs)
+    #         #returns the current layer
+    #         return self
+    #     else:
+    #         # if the inputs are tensors and the function it will be built and continue apply conv to it
+    #         if not self.built:
+    #             self.build(inputs.shape)
 
-            if self.input_shape[-3:] != inputs.shape[-3:] and len(self.input_shape) == 4:
-                raise Exception(f"Error in layer {self.name}, Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
-            else:
-                return self.call(inputs)
+    #         if self.input_shape[-3:] != inputs.shape[-3:] and len(self.input_shape) == 4:
+    #             raise Exception(f"Error in layer {self.name}, Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
+    #         else:
+    #             return self.call(inputs)
 
     def __repr__(self):
         if self.built:
@@ -159,17 +158,23 @@ class MaxPool2D(Layer):
         - key: stores Pseudo Random Generator Key, default PRNGKey(1)
     '''
 
-    def __init__(self, pool_size: Union[int, tuple] = (2,2), strides: Union[int, tuple] = (2,2), padding: str = 'valid', spec: ConvDimensionNumbers = None, key: PRNGKey = PRNGKey(1)):
+    def __init__(self, pool_size: Union[int, tuple] = (2,2), strides: Union[int, tuple] = (2,2), padding: str = 'valid', 
+    spec: ConvDimensionNumbers = None, key: PRNGKey = PRNGKey(1), **kwargs):
         super(MaxPool2D, self).__init__(key=key, trainable=False)
         self.pool_size = pool_size
         self.strides = strides
         self.padding = padding
         self.spec = spec
         self.trainable = False
+
+        input_shape = kwargs.get('input_shape', False)
+        if input_shape:
+            self.build(input_shape)
         
     def _validate_init(self):
         if isinstance(self.pool_size, int):
             self.pool_size = (self.pool_size, self.pool_size)
+            
         elif isinstance(self.pool_size, tuple) and len(self.pool_size) == 1:
             self.pool_size += self.pool_size
 
@@ -177,13 +182,20 @@ class MaxPool2D(Layer):
             self.strides = (self.strides, self.strides)
         elif isinstance(self.strides, tuple) and len(self.strides) == 1:
             self.strides += self.strides
+
+        non_spatial_axes = 0, len(self.pool_size) + 1
+        for i in sorted(non_spatial_axes):
+            window_shape = self.pool_size[:i] + (1,) + self.pool_size[i:]
+            strides = self.strides[:i] + (1,) + self.strides[i:]
+
+        self.pool_size = window_shape
+        self.strides = strides
     
     def compute_output_shape(self):
         padding_vals = lax.padtype_to_pads(self.input_shape, self.pool_size,
                                          self.strides, self.padding)
         ones = (1,) * len(self.pool_size)
-        out_shape = lax.reduce_window_shape_tuple(
-            self.input_shape, self.window_shape, self.strides, padding_vals, ones, ones)
+        out_shape = lax.reduce_window_shape_tuple(self.input_shape, self.pool_size, self.strides, padding_vals, ones, ones)
         return out_shape
 
     @property
@@ -206,19 +218,19 @@ class MaxPool2D(Layer):
         self.output = self.maxpool_op(params, inputs)
         return self.output
 
-    def __call__(self, inputs: DeviceArray, **kwargs):
-        if not hasattr(inputs, 'shape'):
-            raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
-        if self.in_construction_mode(inputs):
-            self.build(inputs.shape)
-            self.connect(inputs)
-            return self
-        else:
-            self.build(inputs.shape)
-            if self.input_shape != inputs.shape:
-                raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
-            else:
-                return self.apply_fn(inputs=inputs, params=self._params)
+    # def __call__(self, inputs: DeviceArray, **kwargs):
+    #     if not hasattr(inputs, 'shape'):
+    #         raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
+    #     if self.in_construction_mode(inputs):
+    #         self.build(inputs.shape)
+    #         self.connect(inputs)
+    #         return self
+    #     else:
+    #         self.build(inputs.shape)
+    #         if self.input_shape != inputs.shape:
+    #             raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
+    #         else:
+    #             return self.apply_fn(inputs=inputs, params=self._params)
 
     def __repr__(self):
         if self.built:
