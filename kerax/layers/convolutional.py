@@ -120,26 +120,6 @@ class Conv2D(Layer):
         if self.activation:
             self.output = self.activation(self.output)
         return self.output
-    
-    # def __call__(self, inputs: Union[Layer, DeviceArray], **kwargs):
-    #     if not hasattr(inputs, 'shape'):
-    #         raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
-    #     # It takes the previous layer to build the current layer
-    #     if self.in_construction_mode(inputs):
-    #         self.build(inputs.shape)
-    #         #General function used to connect with the previous layer
-    #         self.connect(inputs)
-    #         #returns the current layer
-    #         return self
-    #     else:
-    #         # if the inputs are tensors and the function it will be built and continue apply conv to it
-    #         if not self.built:
-    #             self.build(inputs.shape)
-
-    #         if self.input_shape[-3:] != inputs.shape[-3:] and len(self.input_shape) == 4:
-    #             raise Exception(f"Error in layer {self.name}, Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
-    #         else:
-    #             return self.call(inputs)
 
     def __repr__(self):
         if self.built:
@@ -217,20 +197,6 @@ class MaxPool2D(Layer):
     def call_with_external_weights(self, params: tuple, inputs: DeviceArray):
         self.output = self.maxpool_op(params, inputs)
         return self.output
-
-    # def __call__(self, inputs: DeviceArray, **kwargs):
-    #     if not hasattr(inputs, 'shape'):
-    #         raise Exception(f"Error in layer {self.name}, Inputs should be tensors, or use Input layer for configuration")
-    #     if self.in_construction_mode(inputs):
-    #         self.build(inputs.shape)
-    #         self.connect(inputs)
-    #         return self
-    #     else:
-    #         self.build(inputs.shape)
-    #         if self.input_shape != inputs.shape:
-    #             raise Exception(f"Not expected shape, input dims should be {self.input_shape} found {inputs.shape}")
-    #         else:
-    #             return self.apply_fn(inputs=inputs, params=self._params)
 
     def __repr__(self):
         if self.built:
