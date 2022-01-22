@@ -31,8 +31,8 @@ class Conv2D(Layer):
                  kernel_initializer: Union[str, Callable] ='glorot_uniform', bias_initializer: Union[str, Callable] ='normal',
                  use_bias: bool = False, key: PRNGKey = PRNGKey(100), 
                  input_dim_order: str = "NHWC", kernel_dim_order: str = "HWIO", output_dim_order: str = "NHWC", 
-                 trainable: bool = True, dtype='float32', name: str = None, **kwargs):
-        super(Conv2D, self).__init__(key=key, trainable=trainable, dtype=dtype, name=name)
+                 trainable: bool = True, dtype='float32', name: str = None, *args, **kwargs):
+        super(Conv2D, self).__init__(key=key, trainable=trainable, dtype=dtype, name=name, *args, **kwargs)
         self.filters = filters
         self.kernel_size = kernel_size
         self.strides = strides
@@ -92,6 +92,7 @@ class Conv2D(Layer):
         'Initializes the Kernel and stores the Conv2D weights'
         if len(input_shape) == 3:
             input_shape = (1, *input_shape)
+        
         k1, k2 = random.split(self.key)
         kernel_shape = self.compute_kernel_shape(input_shape)
         self.kernel_weights = self.add_weight(k1, kernel_shape, self.kernel_initializer, self.dtype, f'{self.name}_kernel', self.trainable)
@@ -100,7 +101,7 @@ class Conv2D(Layer):
             self.bias_weights = self.add_weight(k2, bias_shape, self.bias_initializer, self.dtype, f'{self.name}_bias', self.trainable)
 
         self._input_shape = input_shape
-        self.dn = lax.conv_dimension_numbers(input_shape, self.kernel_shape, self.dimension_numbers)
+        self.dn = lax.conv_dimension_numbers(input_shape, kernel_shape, self.dimension_numbers)
         self.built = True
 
     def convolution_op(self, params: tuple, inputs: DeviceArray):
@@ -121,12 +122,6 @@ class Conv2D(Layer):
             self.output = self.activation(self.output)
         return self.output
 
-    def __repr__(self):
-        if self.built:
-            return f"<Convolutional Layer with input shape {self.input_shape} and output shape {self.shape}>"
-        else:
-            return "<Convolutional Layer>"
-
 class MaxPool2D(Layer):
     '''
     MaxPool Layer, (Layer subclass)
@@ -139,8 +134,8 @@ class MaxPool2D(Layer):
     '''
 
     def __init__(self, pool_size: Union[int, tuple] = (2,2), strides: Union[int, tuple] = (2,2), padding: str = 'valid', 
-    spec: ConvDimensionNumbers = None, key: PRNGKey = PRNGKey(1), **kwargs):
-        super(MaxPool2D, self).__init__(key=key, trainable=False)
+    spec: ConvDimensionNumbers = None, key: PRNGKey = PRNGKey(1), *args, **kwargs):
+        super(MaxPool2D, self).__init__(key=key, trainable=False, *args, **kwargs)
         self.pool_size = pool_size
         self.strides = strides
         self.padding = padding
@@ -190,19 +185,13 @@ class MaxPool2D(Layer):
         out = lax.reduce_window(inputs, -jnp.inf, lax.add, self.pool_size, self.strides, self.padding)
         return out
 
-    def call(self, inputs: DeviceArray, **kwargs):
+    def call(self, inputs: DeviceArray, *args, **kwargs):
         self.output = self.maxpool_op(self.params, inputs)
         return self.output
 
-    def call_with_external_weights(self, params: tuple, inputs: DeviceArray):
+    def call_with_external_weights(self, params: tuple, inputs: DeviceArray, *args, **kwargs):
         self.output = self.maxpool_op(params, inputs)
         return self.output
-
-    def __repr__(self):
-        if self.built:
-            return f"<MaxPool Layer with input shape {self.input_shape} and output shape {self.shape}>"
-        else:
-            return "<MaxPool Layer>"
 
 class AvgPool2D(Layer):
     pass

@@ -104,7 +104,7 @@ class Model(Trackable):
     def train_step(self, x, y):
         'Returns loss value and takes training batch'
         # loss = self.loss_fn(self.graph.params, x, y)
-        loss, grads = self.optimizer.get_gradients(x, y)
+        loss, grads = self.optimizer.get_loss_and_gradients(x, y)
         self.optimizer.apply_gradients(grads)
         return loss
 

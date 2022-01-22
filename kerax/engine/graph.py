@@ -1,5 +1,7 @@
 from collections import namedtuple, deque
 from kerax.layers.core import Input
+from jax import numpy as jnp
+
 
 class Graph:
     def __init__(self, **kwargs):
@@ -111,30 +113,46 @@ class Graph:
         if not self.same_input_len(args):
             raise Exception(f'Not the same input length expected {len(self.inputs)} found {len(args)}')
         
-        for arg, input_layer in zip(args, self.inputs):
-            input_layer(arg)
 
+        consumed_args = 0
+        outs = []
         for layer in self.layers:
             prevs = layer._node_container.inbound_nodes
-            if not isinstance(layer, Input):
-                if len(prevs) > 1:
-                    outputs = layer([prev.output for prev in prevs])
-                elif len(prevs) == 1:
-                    outputs = layer(prevs[0].output)
-        return outputs
+            if not prevs and isinstance(layer, Input):
+                layer(args[consumed_args])
+                consumed_args += 1
+            elif len(prevs) > 1:
+                prev_outs = jnp.array([prev.get_output() for prev in prevs])
+                out = layer(prev_outs)
+            elif len(prevs) == 1:
+                out = layer(prevs[0].get_output())
+            
+            if layer in self.outputs:
+                outs.append(out)
+        return outs if len(outs) > 1 else outs[0]
+
 
     def call_with_external_weights(self, params, *args):
-        for arg, input_layer in zip(args, self.inputs):
-            input_layer(arg)
-
-        for layer, param in zip(self.layers, params):
+        if len(args) != len(self.inputs):
+            raise Exception(f'Not the same input length expected {len(self.inputs)} found {len(args)}')
+        
+        consumed_args = 0
+        outs = []
+        for param, layer in zip(params, self.layers):
             prevs = layer._node_container.inbound_nodes
-            if not isinstance(layer, Input):
-                if len(prevs) > 1:
-                    outputs = layer.call_with_external_weights(param, [prev.output for prev in prevs])
-                elif len(prevs) == 1:
-                    outputs = layer.call_with_external_weights(param, prevs[0].output)
-        return outputs
+            if not prevs and isinstance(layer, Input):
+                layer.call_with_external_weights(param, args[consumed_args])
+                consumed_args += 1
+            elif len(prevs) > 1:
+                prev_outs = jnp.array([prev.get_output() for prev in prevs])
+                out = layer.call_with_external_weights(param, prev_outs)
+            elif len(prevs) == 1:
+                out = layer.call_with_external_weights(param, prevs[0].get_output())
+
+            if layer in self.outputs:
+                outs.append(out)
+
+        return outs if len(outs) > 1 else outs[0]
     
     def __call__(self, inputs):
         return self.call(inputs)
