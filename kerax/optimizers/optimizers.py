@@ -31,10 +31,10 @@ class Optimizer:
 
     def get_loss_and_gradients(self, x, y):
         'Returns the loss value and the gradients'
-        return value_and_grad(self.loss_fn)(self.model.params, x, y)
+        return value_and_grad(self.loss_fn, argnums=0)(self.model.params, x, y)
 
     def get_gradients(self, x, y):
-        return grad(self.loss_fn)(self.model.params, x, y)
+        return grad(self.loss_fn, argnums=0)(self.model.params, x, y)
     
 class SGD(Optimizer):
     '''
