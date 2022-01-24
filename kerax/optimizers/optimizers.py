@@ -1,7 +1,7 @@
-from jax.example_libraries import optimizers #type: ignore
-from jax import value_and_grad, grad #type: ignore
-from jax import jit #type: ignore
 import optax
+from jax import jit  # type: ignore
+from jax import grad, value_and_grad  # type: ignore
+from jax.example_libraries import optimizers  # type: ignore
 
 
 class Optimizer:

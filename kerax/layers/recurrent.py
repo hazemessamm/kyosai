@@ -1,5 +1,7 @@
-from jax import numpy as jnp #type: ignore
-from layers import Layer, Input
+from jax import numpy as jnp  # type: ignore
+
+from layers import Input, Layer
+
 
 class GRU(Layer):
     def __init__(self, units, activation='tanh', recurrent_activation='sigmoid', 

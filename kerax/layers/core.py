@@ -1,19 +1,19 @@
-from typing import List, Union, Callable
-from numpy import ndarray
-from kerax.engine import Trackable
-from kerax.initializers import initializers
-from kerax.initializers import Initializer
-from kerax import activations
-from jax import numpy as jnp
-from jax.example_libraries import stax
-from jax.random import PRNGKey
-from jax import random
-from functools import reduce, cached_property
 import operator as op
+from functools import cached_property, reduce
+from typing import Callable, List, Union
+
 from jax import lax
-from kerax import backend
+from jax import numpy as jnp
+from jax import random
+from jax.example_libraries import stax
 from jax.numpy import DeviceArray
-from kerax.engine.containers import Weight, NodeContainer
+from jax.random import PRNGKey
+from kerax import activations, backend
+from kerax.engine import Trackable
+from kerax.engine.containers import NodeContainer, Weight
+from kerax.initializers import Initializer, initializers
+from numpy import ndarray
+
 
 class Layer(Trackable):
     def __init__(self, key: PRNGKey = False, trainable: bool = True, dtype: str = 'float32', name: str = None, *args, **kwargs):

@@ -1,4 +1,4 @@
-from jax.nn import initializers as jax_initializers #type: ignore
+from jax.nn import initializers as jax_initializers  # type: ignore
 
 
 class InitializerNotFoundException(Exception):

@@ -1,11 +1,12 @@
 from __future__ import absolute_import
-from kerax import optimizers
-from jax import numpy as jnp #type: ignore
-from kerax import losses
+
+from jax import numpy as jnp  # type: ignore
 from tqdm import tqdm, trange
-from kerax.engine.data_adapter import TensorLikeDataAdapter #type: ignore
-from kerax.engine.graph import Graph
+
+from kerax import losses, optimizers
 from kerax.engine import Trackable
+from kerax.engine.data_adapter import TensorLikeDataAdapter  # type: ignore
+from kerax.engine.graph import Graph
 from kerax.layers.core import Layer
 
 

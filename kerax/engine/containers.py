@@ -1,7 +1,7 @@
-from jax.random import PRNGKey
-from kerax.initializers import Initializer
-from kerax.initializers import initializers
 from jax.numpy import DeviceArray
+from jax.random import PRNGKey
+from kerax.initializers import Initializer, initializers
+
 
 class Container:
     def __init__(self):

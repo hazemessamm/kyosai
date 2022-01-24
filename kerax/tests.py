@@ -1,11 +1,12 @@
-import layers
 import numpy as np
 from jax import numpy as jnp
-import optimizers
-from utils import to_categorical
 from jax import random
+
+import layers
 import losses
 import models
+import optimizers
+from utils import to_categorical
 
 ###Testing
 inputs = layers.Input((64,28,28,1))
@@ -23,6 +24,7 @@ model.compile(loss=losses.CategoricalCrossEntropy(model), optimizer='adam')
 
 
 from tensorflow.keras.datasets import mnist
+
 (x_train, y_train), (x_test, y_test) = mnist.load_data()
 x_train = x_train.astype('float32')
 x_train /= 255.0

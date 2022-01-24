@@ -1,26 +1,6 @@
-from jax.nn import (
-    relu,
-    leaky_relu,
-    softmax,
-    softplus,
-    soft_sign,
-    log_softmax,
-    celu,
-    elu,
-    relu6,
-    glu,
-    hard_sigmoid,
-    hard_swish,
-    hard_silu,
-    hard_tanh,
-    gelu,
-    logsumexp,
-    swish,
-    sigmoid,
-    selu,
-    silu
-
-)
+from jax.nn import (celu, elu, gelu, glu, hard_sigmoid, hard_silu, hard_swish,
+                    hard_tanh, leaky_relu, log_softmax, logsumexp, relu, relu6,
+                    selu, sigmoid, silu, soft_sign, softmax, softplus, swish)
 
 ReLU = relu
 leaky_relu = leaky_relu
@@ -48,7 +28,8 @@ supported_activations = {
     'soft_sign': soft_sign,
     'softmax': softmax,
     'softplus': softplus,
-    'swish': swish
+    'swish': swish,
+    'leaky_relu': leaky_relu,
 }
 
 def get(identifier):

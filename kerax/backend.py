@@ -1,5 +1,6 @@
-from kerax.engine import Trackable
 import jax
+
+from kerax.engine import Trackable
 
 _PRECISION = 'float32'
 

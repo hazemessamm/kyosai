@@ -1,6 +1,7 @@
-from collections import namedtuple, deque
-from kerax.layers.core import Input
+from collections import deque, namedtuple
+
 from jax import numpy as jnp
+from kerax.layers.core import Input
 
 
 class Graph:

@@ -1,7 +1,6 @@
 import abc
 
 
-
 class DataAdapter(metaclass=abc.ABCMeta):
     def __init__(self, x, y=None, **kwargs):
         self.x = x

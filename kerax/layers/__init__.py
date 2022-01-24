@@ -1,16 +1,3 @@
-from .core import (
-    Layer, 
-    Dense, 
-    Activation, 
-    Add, 
-    BatchNormalization, 
-    Concatenate, 
-    Dropout, 
-    Flatten, 
-    Input,
-    Weight
-)
-from .convolutional import (
-    Conv2D, 
-    MaxPool2D
-)
+from .convolutional import Conv2D, MaxPool2D
+from .core import (Activation, Add, BatchNormalization, Concatenate, Dense,
+                   Dropout, Flatten, Input, Layer, Weight)

@@ -1,11 +1,14 @@
 from typing import Callable, Union
-from jax import jit, random, vmap
-from jax.random import PRNGKey #type: ignore
-from .core import Layer
-from jax.numpy import DeviceArray
+
+from jax import jit, lax
 from jax import numpy as jnp
-from jax import lax
+from jax import random, vmap
 from jax._src.lax.convolution import ConvDimensionNumbers
+from jax.numpy import DeviceArray
+from jax.random import PRNGKey  # type: ignore
+
+from .core import Layer
+
 
 class Conv2D(Layer):
     '''

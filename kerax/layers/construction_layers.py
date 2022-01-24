@@ -1,6 +1,7 @@
-from kerax.activations import activations
-from jax import numpy as jnp #type:ignore
 from jax import lax
+from jax import numpy as jnp  # type:ignore
+from kerax.activations import activations
+
 
 #Construction layer for the activation
 def Activation(identifier):

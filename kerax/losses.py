@@ -1,5 +1,7 @@
-from jax import numpy as jnp #type:ignore
+import optax
 from jax import lax
+from jax import numpy as jnp  # type:ignore
+
 
 class Reducer:
     def __init__(self, reduction=None):
@@ -48,7 +50,7 @@ class CategoricalCrossEntropy(Loss):
         y_preds = self.model.call_with_external_weights(params, x)
         y_preds = jnp.clip(y_preds, self.epsilon, 1. - self.epsilon)
         num_samples = y_preds.shape[0]
-        return self.reduction(-jnp.sum(y*jnp.log(y_preds+1e-9))/num_samples)
+        return -jnp.sum(y*jnp.log(y_preds+1e-9))/num_samples
 
 class MeanSquaredError(Loss):
     def __init__(self, model, reduction=None, name=None):
@@ -87,7 +89,7 @@ class BinaryCrossEntropy(Loss):
     
     def call(self, params, x, y):
         y_pred = self.model.call_with_external_weights(params, x)
-        lhs = y * jnp.log(y_pred  * self.epsilon)
+        lhs = y * jnp.log(y_pred *self.epsilon)
         rhs = (1 - y) * jnp.log(1-y_pred+self.epsilon)
         return -jnp.mean(lhs + rhs)
     
