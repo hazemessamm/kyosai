@@ -1,4 +1,3 @@
-import optax
 from jax import jit  # type: ignore
 from jax import grad, value_and_grad  # type: ignore
 from jax.example_libraries import optimizers  # type: ignore
@@ -21,9 +20,13 @@ class Optimizer:
         self.model = model
         self.step_index = 0
 
-    # This function should be implemented by the subclasses
     def apply_gradients(self, grads):
-        raise NotImplementedError("This method should be implemented in a subclass and should not be called from the Optimizer base class")
+        'Updates the model params'
+        # returns new optimizer state by calling the update function
+        self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
+        # Apply new weights on the model
+        self.model.update_weights(self.get_params(self.optimizer_state))
+        self.increment_step_index()
     
     def increment_step_index(self):
         'Increment step index'
@@ -55,17 +58,9 @@ class SGD(Optimizer):
         get params takes the optimizer state and returns the params
         '''
         self.init_fn, self.update_fn, self.get_params = optimizers.sgd(step_size=learning_rate)
-        #declars optimizer state and takes model current trainable params
+        # declares optimizer state and takes model current trainable params
         self.optimizer_state = self.init_fn(model.params)
         self.update_fn = jit(self.update_fn)
-
-    def apply_gradients(self, grads):
-        'Updates the model params'
-        #returns new optimizer state by calling the update function
-        self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
-        #Apply new weights on the model
-        self.model.update_weights(self.get_params(self.optimizer_state))
-        self.increment_step_index()
 
 class Adam(Optimizer):
     '''
@@ -87,11 +82,6 @@ class Adam(Optimizer):
         self.init_fn, self.update_fn, self.get_params = optimizers.adam(step_size=learning_rate, b1=beta_1, b2=beta_2, eps=epsilon)
         self.optimizer_state = self.init_fn(model.params)
         self.update_fn = jit(self.update_fn)
-
-    def apply_gradients(self, grads):
-        self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
-        self.model.update_weights(self.get_params(self.optimizer_state))
-        self.increment_step_index()
         
 
 class Adagrad(Optimizer):
@@ -110,11 +100,6 @@ class Adagrad(Optimizer):
         self.init_fn, self.update_fn, self.get_params = optimizers.adagrad(step_size=learning_rate, momentum=momentum)
         self.optimizer_state = self.init_fn(model.params)
         self.update_fn = jit(self.update_fn)
-    
-    def apply_gradients(self, grads, step=0):
-        self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
-        self.model.update_weights(self.get_params(self.optimizer_state))
-        self.increment_step_index()
 
 
 supported_optimizers = {
