@@ -6,7 +6,7 @@ from tqdm import tqdm, trange
 from kerax import losses, optimizers
 from kerax.engine import Trackable
 from kerax.engine.data_adapter import TensorLikeDataAdapter  # type: ignore
-from kerax.engine.graph import Graph
+from kerax.engine.graph import Graph, GraphV2
 from kerax.layers.core import Layer
 
 
@@ -16,13 +16,6 @@ class Model(Trackable):
     input_layer: takes the input layer
     output_layer: takes the output layer
     '''
-    SUPPORTED_KWARGS = {
-            'input',
-            'output',
-            'inputs',
-            'outputs',
-            'name'
-        }
     def __init__(self, *args, **kwargs):
         super(Model, self).__init__(self.__class__.__name__ if kwargs.get('name') is None else kwargs.get('name'))
         #Aliases
@@ -43,7 +36,7 @@ class Model(Trackable):
     def layers(self):
         if self._sequential_model:
             return self._layers
-        return self.graph.layers
+        return self.graph.layers.values()
 
     @property
     def params(self):
@@ -64,13 +57,12 @@ class Model(Trackable):
     def initialize_graph(self, *args, **kwargs):
         'Stores the layers and paramters'
         if not self._sequential_model:
-            self.graph = Graph(**kwargs)
+            self.graph = GraphV2(*args, **kwargs)
 
-    def compile(self, loss, optimizer, metrics=['loss']):
+    def compile(self, loss, optimizer):
         'Takes the loss, optimizer and loss recorder state'
         self.loss_fn = losses.get(loss)(self)
         self.optimizer = optimizers.get(optimizer)
-        self.metrics = metrics
         #if optimizer is string then it needs configuration
         if isinstance(optimizer, str):
             self.optimizer = self.optimizer(loss_fn=self.loss_fn, model=self)
@@ -169,8 +161,8 @@ class Sequential(Model):
     def call_with_external_weights(self, params, inputs):
         'Takes inputs and params and returns predictions'
         outputs = inputs
-        for layer in self.layers:
-            outputs = layer.call_with_external_weights(params, outputs)
+        for param, layer in zip(params, self.layers):
+            outputs = layer.call_with_external_weights(param, outputs)
         return outputs
 
     def set_weights(self, weights):

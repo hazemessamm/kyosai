@@ -1,6 +1,6 @@
 import operator as op
-from functools import cached_property, reduce
-from typing import Callable, List, Union
+from functools import reduce
+from typing import Any, Callable, List, Tuple, Union
 
 from jax import lax
 from jax import numpy as jnp
@@ -72,7 +72,7 @@ class Layer(Trackable):
         'Connects the current layer with the previous layer'
         self._node_container.connect_nodes(self, layer)
 
-    def add_weight(self, key: PRNGKey, shape: tuple, initializer: Initializer, dtype: str, name: str, trainable: bool):
+    def add_weight(self, key: PRNGKey, shape: Tuple, initializer: Initializer, dtype: str, name: str, trainable: bool):
         weight = Weight(key, shape, initializer, dtype, name, trainable)
         self._params.append(weight)
         return weight
@@ -92,21 +92,19 @@ class Layer(Trackable):
 
     def __call__(self, inputs, *args, **kwargs):
             if isinstance(inputs, (list, tuple)):
-                if not self.built:
-                    main_type = type(inputs[0])
-                    for i, input_ in enumerate(inputs[1:]):
-                        if type(input_) is not main_type:
-                            raise Exception(f'Error in layer {self.name}, found input at index {i} is not instance of Layer while the previous are, all of inputs should have the same type')
-                        if not hasattr(input_, 'shape'):
-                            raise Exception(f'Error in layer {self.name}, found input at index {i} does not have `shape` attribute, all of inputs should have `shape` attribute')
+                if self.built:
+                    return self.call(inputs, *args, **kwargs)
+                
+                # if the inputs are a list of layers
+                if all([isinstance(_input, Layer) for _input in inputs]):
+                    self.build([_input.shape for _input in inputs])
+                    self.connect(inputs)
+                    return self
 
-                    if isinstance(inputs[0], Layer):
-                        self.build(inputs[0].shape)
-                        self.connect(inputs)
-                        return self
-                    else:
-                        self.build(inputs[0].shape)
-                        return self.call(inputs, *args, **kwargs)
+                # if the inputs are list of tensors
+                elif all([isinstance(_input, (ndarray, DeviceArray)) for _input in inputs]):
+                    self.build([_input.shape for _input in inputs])
+                    return self.call(inputs, *args, **kwargs)
             elif isinstance(inputs, Layer):
                 if self.built:
                     raise Exception(f'Error in layer {self.name}, this layer is already built, you cannot pass any more layers to it')
@@ -150,6 +148,7 @@ class Input(Layer):
         if not shape or not isinstance(shape, tuple):
             raise Exception(f'shape should have value in a tuple, found {shape} with type {type(shape)}')
         if shape:
+            shape = tuple(shape)
             self._shape, self._input_shape = shape, shape
             self.built = True
         else:
@@ -210,7 +209,7 @@ class Dense(Layer):
         return self.bias_weights.shape
 
     def compute_output_shape(self):
-        return (1, self.units)
+        return (None, self.units)
 
     def build(self, input_shape: tuple):
         self._input_shape = (input_shape[-1],)
@@ -253,7 +252,7 @@ class Flatten(Layer):
     def compute_output_shape(self):
         return (self.input_shape[0], reduce(op.mul, self.input_shape[1:], 1))
 
-    @cached_property
+    @property
     def shape(self):
         return (reduce(op.mul, self.input_shape[1:], 1),)
 
@@ -355,32 +354,39 @@ class Activation(Layer):
 
 
 class Concatenate(Layer):
-    def __init__(self, layers: List[Layer], axis: int = -1, name: str = None, *args, **kwargs):
+    def __init__(self, axis: int = -1, name: str = None, *args, **kwargs):
         super(Concatenate, self).__init__(name=name, *args, **kwargs)
         self.axis = axis
-        self.layers = layers
 
     @property
     def shape(self):
         return self._output_shape
 
     @property
-    def output_shape(self):
+    def input_shape(self):
         return self._input_shape
 
     def build(self, input_shape: tuple):
-        self._input_shape = input_shape
+        if not isinstance(input_shape, list) or len(input_shape) <= 1:
+            raise Exception('Input shapes should be passed as a list with more than one value in it to the build() method')
+        else:
+            first_shape = input_shape[0][self.axis]
+            for curr_shape in input_shape[1:]:
+                if curr_shape[self.axis] != first_shape:
+                    raise Exception(f'Input shapes should have the same dimension at axis {self.axis}')
+
+        self._input_shape = input_shape[0]
+        self._output_shape = (*input_shape[0][:-1], sum([i[self.axis] for i in input_shape]))
         self.built = True
     
-    def concatenate_op(self, params: tuple, inputs: DeviceArray):
+    def concatenate_op(self, params: Tuple, inputs: DeviceArray):
         return jnp.concatenate(inputs, axis=self.axis)
 
     def call(self, inputs: DeviceArray,  *args, **kwargs):
-        layer_outputs = tuple(out.get_output() for out in self.layers)
-        self.output = self.concatenate_op(self.params, layer_outputs)
+        self.output = self.concatenate_op(self.params, inputs)
         return self.output
 
-    def call_with_external_weights(self, params: tuple, inputs: DeviceArray, *args, **kwargs):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, *args, **kwargs):
         self.output = self.concatenate_op(params, inputs)
         return self.output
 
@@ -398,18 +404,23 @@ class Add(Layer):
         return self._output_shape
 
     def add_op(self, params: tuple, inputs: DeviceArray):
-        input_1, input_2 = inputs
-        return lax.add(input_1, input_2)
+        inputs = jnp.stack(inputs, axis=0)
+        return jnp.sum(inputs, axis=0)
 
     def build(self, input_shape: tuple):
-        self._input_shape, self._output_shape = input_shape, input_shape
+        if not isinstance(input_shape, list) or len(input_shape) <= 1:
+            raise Exception('Input shapes should be passed as a list with more than one value in it to the build() method')
+        else:
+            first_shape = input_shape[0][-1]
+            for curr_shape in input_shape[1:]:
+                if curr_shape[-1] != first_shape:
+                    raise Exception('Input shapes should have the same last dimension')
+
+        self._input_shape, self._output_shape = input_shape[0], input_shape[0]
         self.built = True
 
     def call(self, inputs: DeviceArray, *args, **kwargs):
-        output = inputs[0]
-        for current_input in inputs[1:]:
-            output = self.add_op(self._params, (output, current_input))
-        self.output = output
+        self.output = self.add_op(self._params, inputs)
         return self.output
 
     def call_with_external_weights(self, params: tuple, inputs: DeviceArray, *args, **kwargs):

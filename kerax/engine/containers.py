@@ -2,12 +2,6 @@ from jax.numpy import DeviceArray
 from jax.random import PRNGKey
 from kerax.initializers import Initializer, initializers
 
-
-class Container:
-    def __init__(self):
-        pass
-
-
 class Weight:
     def __init__(self, key: PRNGKey, shape: tuple, initializer: Initializer, dtype: str, name: str, trainable: bool):
         self.key = key
