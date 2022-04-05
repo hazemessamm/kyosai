@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-from audioop import avg
 
 from jax import numpy as jnp
 from sympy import E  # type: ignore
@@ -8,7 +7,7 @@ from tqdm import tqdm, trange
 from kerax import losses, optimizers
 from kerax.engine import Trackable
 from kerax.engine.data_adapter import TensorLikeDataAdapter  # type: ignore
-from kerax.engine.graph import Graph, GraphV2
+from kerax.engine.graph import GraphV2
 from kerax.layers.core import Layer
 
 

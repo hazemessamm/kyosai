@@ -2,7 +2,7 @@ import operator as op
 from functools import reduce
 from typing import Any, Callable, Tuple, Union
 
-from jax import lax, jit
+from jax import jit, lax
 from jax import numpy as jnp
 from jax import random
 from jax.example_libraries import stax
@@ -13,8 +13,6 @@ from kerax.engine import Trackable
 from kerax.engine.containers import NodeContainer, Weight
 from kerax.initializers import Initializer, initializers
 from numpy import ndarray
-
-
 
 
 class InputSpec:

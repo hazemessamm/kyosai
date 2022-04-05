@@ -1,6 +1,7 @@
-from .core import Layer, Dense
-from jax import numpy as jnp
 from jax import nn
+from jax import numpy as jnp
+
+from .core import Dense, Layer
 
 
 class Attention(Layer):
