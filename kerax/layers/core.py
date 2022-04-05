@@ -1,8 +1,8 @@
 import operator as op
 from functools import reduce
-from typing import Any, Callable, List, Tuple, Union
+from typing import Any, Callable, Tuple, Union
 
-from jax import lax
+from jax import lax, jit
 from jax import numpy as jnp
 from jax import random
 from jax.example_libraries import stax
@@ -15,11 +15,30 @@ from kerax.initializers import Initializer, initializers
 from numpy import ndarray
 
 
+
+
+class InputSpec:
+    def __init__(self):
+        self.input_shape = None
+        self.valid_ndims = None
+        self._internal_input_shape = None
+
+    def build(self, input_shape, valid_ndims):
+        if valid_ndims != len(input_shape):
+            raise Exception(f'number of dims in input_shape does not match the required number of dims, found {len(input_shape)} expected {valid_ndims}')
+        
+        self.input_shape = input_shape
+        self.valid_ndims = valid_ndims
+        self._internal_input_shape = (None, *input_shape)
+
+
+
 class Layer(Trackable):
     def __init__(self, key: PRNGKey = False, trainable: bool = True, dtype: str = 'float32', name: str = None, *args, **kwargs):
         super(Layer, self).__init__(self.__class__.__name__ if name is None else name)
         # Stores the layer params
         self._params = []
+
         # Stores the previous layer
         self._node_container = NodeContainer()
         self.built = False
@@ -27,9 +46,29 @@ class Layer(Trackable):
         self.trainable = trainable
         self.output = None
         self.dtype = dtype or backend.precision()
+        self._has_nested_layers = False
+        self._is_nested = False
+        self._requires_unpacking_on_call = False
+
+
+    def __setattr__(self, __name: str, __value: Any) -> None:
+        if isinstance(__value, Layer):
+            if not self._has_nested_layers:
+                self._has_nested_layers = True
+                self._nested_layers = [__value]
+            else:
+                self._nested_layers.append(__value)
+            
+            __value._is_nested = True
+        return super().__setattr__(__name, __value)
 
     def __name__(self):
         return self.name
+
+    def check_jit(self):
+        if backend.is_jit_enabled():
+            self.call = jit(self.call)
+
 
     @property
     def shape(self):
@@ -51,13 +90,17 @@ class Layer(Trackable):
 
     @property
     def params(self):
-        return tuple(param.get_weights() for param in self._params)
+        params = [param.get_weights() for param in self._params]
+        if self._has_nested_layers:
+            nested_params = tuple(layer.params for layer in self._nested_layers)
+            params.extend(nested_params)
+        return tuple(params)
 
     @property
     def named_params(self):
         return {param.name: param.get_weights for param in self._params}
 
-    def build(self, input_shape: tuple):
+    def build(self, input_shape: Tuple):
         return NotImplementedError('Should be implemented in a subclass')
 
     def get_initializer(self, identifier: Union[str, Initializer]):
@@ -80,11 +123,11 @@ class Layer(Trackable):
     def get_weights(self):
         return self._params
 
-    def set_weights(self, new_weights: tuple):
+    def set_weights(self, new_weights: Tuple):
         for w1, w2 in zip(self._params, new_weights):
             w1.set_weights(w2)
 
-    def update_weights(self, new_weights: tuple):
+    def update_weights(self, new_weights: Tuple):
         if self.trainable and len(new_weights) > 0:
             for w1, w2 in zip(self._params, new_weights):
                 if w1.trainable:
@@ -121,7 +164,7 @@ class Layer(Trackable):
             else:
                 raise Exception(f'Error in layer {self.name}, {type(inputs)} is not supported, supported: (list, tuple, Layer, DeviceArray, ndarray)')
 
-    def call(self, inputs, *args, **kwargs):
+    def call(self, inputs: DeviceArray):
         raise NotImplementedError('This method should be implemented in Layer subclasses')
 
     def get_output(self):
@@ -143,7 +186,7 @@ class Input(Layer):
     '''
 
 
-    def __init__(self, shape: tuple = None, dtype: str = 'float32', name: str = None):
+    def __init__(self, shape: Tuple = None, dtype: str = 'float32', name: str = None):
         super().__init__(key=None, trainable=False, dtype=dtype, name=name)
         if not shape or not isinstance(shape, tuple):
             raise Exception(f'shape should have value in a tuple, found {shape} with type {type(shape)}')
@@ -156,20 +199,20 @@ class Input(Layer):
     
     @property
     def shape(self):
-        return self._shape
+        return (None, *self._shape)
 
     @property
     def input_shape(self):
         return self._input_shape
 
-    def build(self, input_shape):
+    def build(self, input_shape: Tuple):
         self._input_shape = input_shape
 
-    def call(self, inputs, *args, **kwargs):
+    def call(self, inputs: DeviceArray):
         self.output = inputs
         return inputs
 
-    def call_with_external_weights(self, params, inputs, *args, **kwargs):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         self.output = inputs
         return inputs
 
@@ -211,7 +254,7 @@ class Dense(Layer):
     def compute_output_shape(self):
         return (None, self.units)
 
-    def build(self, input_shape: tuple):
+    def build(self, input_shape: Tuple):
         self._input_shape = (input_shape[-1],)
         k1, k2 = random.split(self.key)
         self.kernel_weights = self.add_weight(k1, (input_shape[-1], self.units), self.kernel_initializer, self.dtype, f'{self.name}_kernel', trainable=self.trainable)
@@ -219,20 +262,20 @@ class Dense(Layer):
             self.bias_weights = self.add_weight(k2, (self.units,), self.bias_initializer, self.dtype, f'{self.name}_bias', trainable=self.trainable)
         self.built = True
 
-    def dense_op(self, params: tuple, inputs: DeviceArray):
-        out = lax.batch_matmul(inputs, params[0])
+    def dense_op(self, params: Tuple, inputs: DeviceArray):
+        out = jnp.matmul(inputs, params[0])
         if self.use_bias:
             out = jnp.add(out, params[1])
         return out
 
-    def call(self, inputs: DeviceArray, *args, **kwargs):
+    def call(self, inputs: DeviceArray):
         'Used during training to pass the parameters while getting the gradients'
         self.output = self.dense_op(self.params, inputs)
         if self.activation:
             self.output = self.activation(self.output)
         return self.output
 
-    def call_with_external_weights(self, params: tuple, inputs: DeviceArray, *args, **kwargs):
+    def call_with_external_weights(self, params: tuple, inputs: DeviceArray):
         self.output = self.dense_op(params, inputs)
         if self.activation:
             self.output = self.activation(self.output)
@@ -254,21 +297,21 @@ class Flatten(Layer):
 
     @property
     def shape(self):
-        return (reduce(op.mul, self.input_shape[1:], 1),)
+        return (None, reduce(op.mul, self.input_shape[1:], 1))
 
-    def build(self, input_shape: tuple):
+    def build(self, input_shape: Tuple):
         self._input_shape = input_shape
         self.built = True
 
-    def flatten_op(self, params: tuple, inputs: DeviceArray):
-        return lax.reshape(inputs, (inputs.shape[0], *self.shape))
+    def flatten_op(self, params: Tuple, inputs: DeviceArray):
+        return lax.reshape(inputs, (inputs.shape[0], *self.shape[1:]))
 
-    def call(self, inputs: DeviceArray, *args, **kwargs):
+    def call(self, inputs: DeviceArray):
         'Used during training to pass the parameters while getting the gradients'
         self.output = self.flatten_op(self.params, inputs)
         return self.output
 
-    def call_with_external_weights(self, params: tuple, inputs: DeviceArray, *args, **kwargs):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         self.output =  self.flatten_op(params, inputs)
         return self.output
 
@@ -293,11 +336,11 @@ class Dropout(Layer):
     def shape(self):
         return self._input_shape
 
-    def build(self, input_shape: tuple):
+    def build(self, input_shape: Tuple):
         self._input_shape = input_shape
         self.built = True
 
-    def dropout_op(self, params: tuple, inputs: DeviceArray):
+    def dropout_op(self, params: Tuple, inputs: DeviceArray):
         keep = random.bernoulli(self.key, self.rate, inputs.shape)
         return jnp.where(keep, inputs / self.rate, 0)
 
@@ -310,7 +353,7 @@ class Dropout(Layer):
             self.output = inputs
         return self.output
     
-    def call_with_external_weights(self, params: tuple, inputs: DeviceArray, *args, **kwargs):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         self.output = self.dropout_op(params, inputs)
         return self.output
 
@@ -337,18 +380,18 @@ class Activation(Layer):
     def shape(self):
         return self._input_shape
     
-    def activation_op(self, params: tuple, inputs: DeviceArray):
+    def activation_op(self, params: Tuple, inputs: DeviceArray):
         return self.activation(inputs)
 
     def build(self, input_shape: tuple):
         self._input_shape = input_shape
         self.built = True
 
-    def call(self, inputs: DeviceArray, *args, **kwargs):
+    def call(self, inputs: DeviceArray):
         self.output = self.activation_op(self.params, inputs)
         return self.output
 
-    def call_with_external_weights(self, params: tuple, inputs: DeviceArray, *args, **kwargs):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         self.output =  self.activation_op(params, inputs)
         return self.output
 
@@ -366,7 +409,7 @@ class Concatenate(Layer):
     def input_shape(self):
         return self._input_shape
 
-    def build(self, input_shape: tuple):
+    def build(self, input_shape: Tuple):
         if not isinstance(input_shape, list) or len(input_shape) <= 1:
             raise Exception('Input shapes should be passed as a list with more than one value in it to the build() method')
         else:
@@ -382,11 +425,11 @@ class Concatenate(Layer):
     def concatenate_op(self, params: Tuple, inputs: DeviceArray):
         return jnp.concatenate(inputs, axis=self.axis)
 
-    def call(self, inputs: DeviceArray,  *args, **kwargs):
+    def call(self, inputs: DeviceArray):
         self.output = self.concatenate_op(self.params, inputs)
         return self.output
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, *args, **kwargs):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         self.output = self.concatenate_op(params, inputs)
         return self.output
 
@@ -403,27 +446,27 @@ class Add(Layer):
     def compute_output_shape(self):
         return self._output_shape
 
-    def add_op(self, params: tuple, inputs: DeviceArray):
+    def add_op(self, params: Tuple, inputs: DeviceArray):
         inputs = jnp.stack(inputs, axis=0)
         return jnp.sum(inputs, axis=0)
 
-    def build(self, input_shape: tuple):
+    def build(self, input_shape: Tuple):
         if not isinstance(input_shape, list) or len(input_shape) <= 1:
             raise Exception('Input shapes should be passed as a list with more than one value in it to the build() method')
         else:
-            first_shape = input_shape[0][-1]
+            first_shape = input_shape[0]
             for curr_shape in input_shape[1:]:
-                if curr_shape[-1] != first_shape:
+                if curr_shape != first_shape:
                     raise Exception('Input shapes should have the same last dimension')
 
         self._input_shape, self._output_shape = input_shape[0], input_shape[0]
         self.built = True
 
-    def call(self, inputs: DeviceArray, *args, **kwargs):
+    def call(self, inputs: DeviceArray):
         self.output = self.add_op(self._params, inputs)
         return self.output
 
-    def call_with_external_weights(self, params: tuple, inputs: DeviceArray, *args, **kwargs):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         out = inputs[0]
         for _input in inputs[1:]:
             out = self.add_op(params, (out, _input))
@@ -443,10 +486,10 @@ class BatchNormalization(Layer):
         self.input_shape = self.shape
         self.built = True
     
-    def call(self, inputs: DeviceArray, *args, **kwargs):
+    def call(self, inputs: DeviceArray):
         self.output = self.apply_fn(params=self._params, x=inputs)
         return self.output
 
-    def call_with_external_weights(self, params: tuple, inputs: DeviceArray, *args, **kwargs):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         self.output = self.apply_fn(params=params, inputs=inputs)
         return self.output

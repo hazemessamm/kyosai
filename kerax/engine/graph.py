@@ -257,7 +257,7 @@ class GraphV2:
             # required_outputs_to = [node.name for node in layer._node_container.outbound_nodes]
             # requires_output_to[layer_name] = required_outputs_to
 
-        params = tuple(layers[layer_name].params for layer_name in requires_output_from.keys())
+        params = [layers[layer_name].params for layer_name in requires_output_from.keys()]
         return layers, requires_output_from, params
 
     
@@ -277,7 +277,11 @@ class GraphV2:
                 if len(val) == 1:
                     saved_outputs[key] = self.layers[key].call_with_external_weights(param, saved_outputs[val[0]])
                 else:
-                    saved_outputs[key] = self.layers[key].call_with_external_weights(param, [saved_outputs[v] for v in val])
+                    requires_unpacking = self.layers[key].call_with_external_weights.__code__.co_argcount > 3
+                    if requires_unpacking:
+                        saved_outputs[key] = self.layers[key].call_with_external_weights(param, *[saved_outputs[v] for v in val])
+                    else:
+                        saved_outputs[key] = self.layers[key].call_with_external_weights(param, [saved_outputs[v] for v in val])
         if self.multiple_branches:
             return [saved_outputs[layer.name] for layer in self.outputs]
         else:

@@ -94,7 +94,7 @@ class Conv2D(Layer):
     def build(self, input_shape: tuple):
         'Initializes the Kernel and stores the Conv2D weights'
         if len(input_shape) == 3:
-            input_shape = (1, *input_shape)
+            input_shape = (None, *input_shape)
         
         k1, k2 = random.split(self.key)
         kernel_shape = self.compute_kernel_shape(input_shape)

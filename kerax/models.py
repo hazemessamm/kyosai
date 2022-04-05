@@ -1,6 +1,8 @@
 from __future__ import absolute_import
+from audioop import avg
 
-from jax import numpy as jnp  # type: ignore
+from jax import numpy as jnp
+from sympy import E  # type: ignore
 from tqdm import tqdm, trange
 
 from kerax import losses, optimizers
@@ -75,7 +77,7 @@ class Model(Trackable):
 
     def call_with_external_weights(self, params, x):
         'Takes inputs and params and returns predictions'
-        return self.graph.call_with_external_weights(params, x)
+        return self.graph.call_with_external_weights(params, [x])
 
     def get_weights(self):
         if self._sequential_model:
@@ -99,32 +101,46 @@ class Model(Trackable):
         # loss = self.loss_fn(self.graph.params, x, y)
         loss, grads = self.optimizer.get_loss_and_gradients(x, y)
         self.optimizer.apply_gradients(grads)
-        return loss
+        return {'Loss': loss}
 
-    def test_step(self, x, y):
-        batch_x, batch_y = self.input.get_validation_batch()
-        return self.loss_fn(self.graph.params, batch_x, batch_y)
+    def test_step(self, validation_dataset):
+        avg_valid_loss = 0
+        for _ in range(validation_dataset.num_batches):
+            batch_x, batch_y = validation_dataset.get_batch()
+            avg_valid_loss += self.loss_fn(self.graph.params, batch_x, batch_y)
+        return {'Validation Loss': avg_valid_loss}
+
+
+    def _test_step(self, validation_dataset):
+        if validation_dataset is None:
+            return {}
+        else:
+            return self.test_step(validation_dataset)
 
     def fit(self, x, y, epochs=1, batch_size=None, steps=None, shuffle=True, validation_data=None):
-        #if the model is not compiled then it will raise exception
+        # If the model is not compiled then it will raise exception
         if not self.compiled:
             raise Exception('Model is not compiled, use compile() method')
 
-        self.dataset = TensorLikeDataAdapter(x, y, batch_size=batch_size, epochs=epochs, steps=steps, shuffle=shuffle)
+        dataset = TensorLikeDataAdapter(x, y, batch_size=batch_size, epochs=epochs, steps=steps, shuffle=shuffle)
 
+        if validation_data:
+            validation_dataset = TensorLikeDataAdapter(x, y, batch_size=batch_size, epochs=epochs, steps=steps, shuffle=False)
+        else:
+            validation_dataset = None
+
+        progress_bar = trange(len(dataset), bar_format='{l_bar}{bar:40}{r_bar}{bar:-20b}', ascii=' =')
+        
         for epoch in range(1, epochs+1):
-            remaining_epochs = int(epochs - epoch)
-            #gets a batch and pass it to the model
-            with trange(len(self.dataset), bar_format='{l_bar}{bar:40}{r_bar}{bar:-20b}') as t:
-                for _ in t:
-                    batch_x, batch_y = self.dataset.get_batch()
-                    train_loss = self.train_step(batch_x, batch_y)
-                    if validation_data:
-                        validation_loss = self.test_step(validation_data[0], validation_data[1])
-                        t.set_postfix(loss=train_loss, validation_loss=validation_loss, remaining_epochs=remaining_epochs)
-                    else:
-                        t.set_postfix(loss=train_loss, remaining_epochs=remaining_epochs)
-                    t.refresh()
+            metrics = {}
+            for _ in progress_bar:
+                batch_x, batch_y = dataset.get_batch()
+                loss = self.train_step(batch_x, batch_y)
+                metrics.update(loss)
+                validation_loss = self._test_step(validation_dataset)
+                metrics.update(loss)
+                progress_bar.set_postfix(**metrics)
+            progress_bar.refresh()
 
 
 class Sequential(Model):

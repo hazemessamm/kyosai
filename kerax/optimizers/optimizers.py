@@ -1,7 +1,7 @@
 from jax import jit  # type: ignore
 from jax import grad, value_and_grad  # type: ignore
 from jax.example_libraries import optimizers  # type: ignore
-
+from kerax import backend
 
 class Optimizer:
     '''
@@ -17,6 +17,10 @@ class Optimizer:
     def __init__(self, loss_fn, model, learning_rate=0.0001):
         self.learning_rate = learning_rate
         self.loss_fn = loss_fn
+        if backend.is_jit_enabled():
+            self.grad_loss = jit(value_and_grad(loss_fn, argnums=0))
+        else:
+            self.grad_loss = value_and_grad(loss_fn, argnums=0)
         self.model = model
         self.step_index = 0
 
@@ -34,7 +38,7 @@ class Optimizer:
 
     def get_loss_and_gradients(self, x, y):
         'Returns the loss value and the gradients'
-        return value_and_grad(self.loss_fn, argnums=0)(self.model.params, x, y)
+        return self.grad_loss(self.model.params, x, y)
 
     def get_gradients(self, x, y):
         return grad(self.loss_fn, argnums=0)(self.model.params, x, y)
