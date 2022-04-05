@@ -3,6 +3,9 @@ from collections import deque, namedtuple, OrderedDict
 from jax import numpy as jnp
 from kerax.layers.core import Input
 
+import itertools
+import generic_utils
+
 
 class GraphV2:
     allowed_kwargs = {'input', 'inputs', 'output', 'outputs'}
@@ -13,7 +16,7 @@ class GraphV2:
 
     def flatten(self, inputs):
         if isinstance(inputs, (list, tuple)):
-            return list(itertools.chain(inputs))
+            return generic_utils.flatten(inputs)
         else:
             return [inputs]
     
