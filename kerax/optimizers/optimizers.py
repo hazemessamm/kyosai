@@ -2,6 +2,8 @@ from jax import jit  # type: ignore
 from jax import grad, value_and_grad  # type: ignore
 from jax.example_libraries import optimizers  # type: ignore
 from kerax import backend
+import optax
+
 
 class Optimizer:
     '''
@@ -14,46 +16,35 @@ class Optimizer:
         - model: stores the model to update it's weights every step
         - learning_rate: stores the learning rate (step_size), default: 0.0001
     '''
-    def __init__(self, loss_fn, model, learning_rate=0.0001):
+    def __init__(self, learning_rate=0.0001):
         self.learning_rate = learning_rate
-        self.loss_fn = loss_fn
-        if backend.is_jit_enabled():
-            self.grad_loss = jit(value_and_grad(loss_fn, argnums=0))
-        else:
-            self.grad_loss = value_and_grad(loss_fn, argnums=0)
-        self.model = model
         self.step_index = 0
+        self._initialized = False
 
-    def apply_gradients(self, grads):
+    def initialize(self, params):
+        self._optimizer_state = self._optimizer.init(params)
+        self._initialized = True
+
+    def minimize(self, params, grads):
         'Updates the model params'
+        if not self._initialized:
+            self._optimizer_state = self._optimizer.init(params)
+            self._initialized = True
         # returns new optimizer state by calling the update function
-        self.optimizer_state = self.update_fn(self.step_index, grads, self.optimizer_state)
-        # Apply new weights on the model
-        self.model.update_weights(self.get_params(self.optimizer_state))
-        self.increment_step_index()
-    
-    def increment_step_index(self):
-        'Increment step index'
-        self.step_index += 1 
-
-    def get_loss_and_gradients(self, x, y):
-        'Returns the loss value and the gradients'
-        return self.grad_loss(self.model.params, x, y)
-
-    def get_gradients(self, x, y):
-        return grad(self.loss_fn, argnums=0)(self.model.params, x, y)
+        updates, self._optimizer_state = self._optimizer.update(grads, self._optimizer_state)
+        # Apply new weights on the current weights
+        new_params = optax.apply_updates(params, updates)
+        return new_params
     
 class SGD(Optimizer):
     '''
     Optimizer subclass
 
     Params:
-        - loss_fn: stores the loss function to get the gradients of the loss function with respect to the params
-        - model: stores the model to update it's weights every step
         - learning_rate: stores the learning rate (step_size), default: 0.0001
     '''
-    def __init__(self, loss_fn, model, learning_rate=0.0001):
-        super(SGD, self).__init__(loss_fn=loss_fn, model=model, learning_rate=learning_rate)
+    def __init__(self, learning_rate=0.0001, momentum=None, nesterov=False):
+        super(SGD, self).__init__(learning_rate=learning_rate)
         '''
         Initializes the Stochastic Gradient Descent
         returns initializer function, update function and get params function
@@ -61,34 +52,44 @@ class SGD(Optimizer):
         update function takes the step index, gradients and the current optimizer state
         get params takes the optimizer state and returns the params
         '''
-        self.init_fn, self.update_fn, self.get_params = optimizers.sgd(step_size=learning_rate)
-        # declares optimizer state and takes model current trainable params
-        self.optimizer_state = self.init_fn(model.params)
-        self.update_fn = jit(self.update_fn)
+        self._momentum = momentum
+        self._nesterov = nesterov
+        self._optimizer = optax.sgd(learning_rate=learning_rate, momentum=momentum, nesterov=nesterov)
 
 class Adam(Optimizer):
     '''
     Optimizer subclass
 
     Params:
-        - loss_fn: stores the loss function to get the gradients of the loss function with respect to the params
-        - model: stores the model to update it's weights every step
         - learning_rate: stores the learning rate (step_size), default: 0.0001
         - beta_1: a positive scalar value for beta_1, the exponential decay rate for the first moment estimates, default: 0.9
         - beta_2: a positive scalar value for beta_2, the exponential decay rate for the second moment estimates, default: 0.999
         - epsilon: a positive scalar value for epsilon, a small constant for numerical stability, default: 1e-8
     '''
-    def __init__(self, loss_fn, model, learning_rate=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08):
-        super(Adam, self).__init__(loss_fn=loss_fn, model=model, learning_rate=learning_rate)
-        self.beta_1 = beta_1
-        self.beta_2 = beta_2
-        self.epsilon = epsilon
-        self.init_fn, self.update_fn, self.get_params = optimizers.adam(step_size=learning_rate, b1=beta_1, b2=beta_2, eps=epsilon)
-        self.optimizer_state = self.init_fn(model.params)
-        self.update_fn = jit(self.update_fn)
+    def __init__(self, learning_rate=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08):
+        super(Adam, self).__init__(learning_rate=learning_rate)
+        self._beta_1 = beta_1
+        self._beta_2 = beta_2
+        self._epsilon = epsilon
+        self._optimizer = optax.adam(learning_rate=learning_rate, b1=beta_1, b2=beta_2, eps=epsilon)
         
 
 class Adagrad(Optimizer):
+    '''
+    Optimizer subclass
+
+    Params:
+        - learning_rate: stores the learning rate (step_size), default: 0.0001
+        - momentum: a positive scalar value for momentum
+    '''
+    def __init__(self, learning_rate: float = 0.001, initial_accumulator_value: float = 0.1, eps: float = 1e-7):
+        super(Adagrad, self).__init__(learning_rate=learning_rate)
+        self._initial_accumulator_value = initial_accumulator_value
+        self._eps = eps
+        self._optimizer = optax.adagrad(learning_rate=learning_rate, initial_accumulator_value=initial_accumulator_value, eps=eps)
+
+
+class RMSProp(Optimizer):
     '''
     Optimizer subclass
 
@@ -98,12 +99,16 @@ class Adagrad(Optimizer):
         - learning_rate: stores the learning rate (step_size), default: 0.0001
         - momentum: a positive scalar value for momentum
     '''
-    def __init__(self, loss_fn, model, learning_rate=0.001, momentum=0.9):
-        super(Adagrad, self).__init__(loss_fn=loss_fn, model=model, learning_rate=learning_rate)
-        self.momentum = momentum
-        self.init_fn, self.update_fn, self.get_params = optimizers.adagrad(step_size=learning_rate, momentum=momentum)
-        self.optimizer_state = self.init_fn(model.params)
-        self.update_fn = jit(self.update_fn)
+    def __init__(self, learning_rate: float = 0.001, decay: float = 0.9, eps: float = 1e-8, initial_scale: float = 0, centered: bool = False, momentum: float or None = None, nesterov: bool = False):
+        super(RMSProp, self).__init__(learning_rate=learning_rate)
+        self._decay = decay
+        self._eps = eps
+        self._initial_scale = initial_scale
+        self._centered = centered
+        self._momentum = momentum
+        self._nesterov = nesterov
+        self._optimizer = optax.rmsprop(learning_rate=learning_rate, decay=decay, eps=eps, initial_scale=initial_scale, 
+        centered=centered, momentum=momentum, nesterov=nesterov)
 
 
 supported_optimizers = {
@@ -115,7 +120,7 @@ supported_optimizers = {
 def get(identifier):
     if identifier is None:
         return None
-    elif isinstance(identifier, Optimizer):
+    elif isinstance(identifier, Optimizer) or callable(identifier):
         return identifier
     else:
         optimizer = supported_optimizers.get(identifier, None)

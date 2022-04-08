@@ -29,6 +29,11 @@ class Weight:
             raise Exception(f'Weights are not initialized yet. Use get_weights() method to initialize the weights')
 
 
+    def update_weights(self, weights: DeviceArray):
+        if self.trainable:
+            self.set_weights(weights)
+
+
     def __repr__(self) -> str:
         return f'{self.name} with shape {self.shape}>'
 

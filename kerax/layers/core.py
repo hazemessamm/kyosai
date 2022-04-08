@@ -34,8 +34,7 @@ class Layer(Trackable):
     def __init__(self, key: PRNGKey = False, trainable: bool = True, dtype: str = 'float32', name: str = None, *args, **kwargs):
         super(Layer, self).__init__(self.__class__.__name__ if name is None else name)
         # Stores the layer params
-        self._params = OrderedDict()
-
+        self._params = []
         # Stores the previous layer
         self._node_container = NodeContainer()
         self.built = False
@@ -83,7 +82,7 @@ class Layer(Trackable):
 
     @property
     def params(self):
-        params = [param for param in self._params.values()]
+        params = [param.get_weights() for param in self._params]
         if self._has_nested_layers:
             nested_params = tuple(layer.params for layer in self._nested_layers)
             params.extend(nested_params)
@@ -109,9 +108,9 @@ class Layer(Trackable):
         self._node_container.connect_nodes(self, layer)
 
     def add_weight(self, key: PRNGKey, shape: Tuple, initializer: Initializer, dtype: str, name: str, trainable: bool):
-        weights = initializer(key, shape, dtype)
-        self._params[name] = weights
-        return weights
+        weight = Weight(key, shape, initializer, dtype, name, trainable)
+        self._params.append(weight)
+        return weight
 
     def get_weights(self):
         return self._params
@@ -121,10 +120,9 @@ class Layer(Trackable):
             w1.set_weights(w2)
 
     def update_weights(self, new_weights: Tuple):
-        if self.trainable and len(new_weights) > 0:
-            for w_name, w2 in zip(self._params.keys(), new_weights):
-                if self.trainable:
-                    self._params[w_name] = w2
+        if len(new_weights) > 0:
+            for w_old, w_new in zip(self._params, new_weights):
+                w_old.update_weights(w_new)
 
     def __call__(self, inputs, *args, **kwargs):
             if isinstance(inputs, (list, tuple)):

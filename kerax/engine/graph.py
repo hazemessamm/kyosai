@@ -29,21 +29,21 @@ class GraphV2:
         
         consumed_args = 0
         if kwargs.get('inputs', False):
-            inputs = self.flatten(kwargs['inputs'])
+            inputs = jax.tree_flatten(kwargs['inputs'])[0]
         else:
             if len(args) == 0:
                 raise Exception('Input is not passed correctly')
             else:
-                inputs = self.flatten(args[consumed_args])
+                inputs = jax.tree_flatten(args[consumed_args])[0]
                 consumed_args += 1
 
         if kwargs.get('outputs', False):
-            outputs = self.flatten(kwargs['outputs'])
+            outputs = jax.tree_flatten(kwargs['outputs'])[0]
         else:
             if len(args) == 0:
                 raise Exception('Output is not passed correctly')
             else:
-                outputs = self.flatten(args[consumed_args])
+                outputs = jax.tree_flatten(args[consumed_args])[0]
         return inputs, outputs
 
 
@@ -99,13 +99,13 @@ class GraphV2:
                 # returning a function that recieves an input but in a list
                 # and has multiple input layers
                 def _call_mult_inputs(params, inputs):
-                    return layer.call_with_external_weights(params, inputs[input_layer_index])
+                    return inputs[input_layer_index]
                 return _call_mult_inputs
             else:
                 # returning a function that recieves a single input for single
                 # input layer
                 def _call_single_input(params, inputs):
-                    return layer.call_with_external_weights(params, inputs)
+                    return inputs
                 return _call_single_input
         return _call
 
