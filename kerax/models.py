@@ -1,10 +1,12 @@
 from __future__ import absolute_import
 
+from jax import lax
 from jax import numpy as jnp
-from sympy import E  # type: ignore
 from tqdm import tqdm, trange
 
-from kerax import losses, optimizers
+from kerax import losses
+from kerax import metrics as _metrics
+from kerax import optimizers
 from kerax.engine import Trackable
 from kerax.engine.data_adapter import TensorLikeDataAdapter  # type: ignore
 from kerax.engine.graph import GraphV2
@@ -60,13 +62,24 @@ class Model(Trackable):
         if not self._sequential_model:
             self.graph = GraphV2(*args, **kwargs)
 
-    def compile(self, loss, optimizer):
+    def compile(self, loss, optimizer, metrics=None):
         'Takes the loss, optimizer and loss recorder state'
         self.loss_fn = losses.get(loss)(self)
         self.optimizer = optimizers.get(optimizer)
         #if optimizer is string then it needs configuration
         if isinstance(optimizer, str):
             self.optimizer = self.optimizer(loss_fn=self.loss_fn, model=self)
+
+        self.metrics_instances = {}
+        if metrics is not None:
+            if not isinstance(metrics, list):
+                raise Exception('metrics should be inside a list')
+            else:
+                for metric in metrics:
+                    if isinstance(metric, str):
+                        self.metrics_instances[metric] = _metrics.get(metric)
+                    else:
+                        self.metrics_instances[metric.__class__.__name__] = _metrics.get(metric)
         self._compiled = True
 
 
@@ -76,7 +89,7 @@ class Model(Trackable):
 
     def call_with_external_weights(self, params, x):
         'Takes inputs and params and returns predictions'
-        return self.graph.call_with_external_weights(params, [x])
+        return self.graph.call_with_external_weights(params, x)
 
     def get_weights(self):
         if self._sequential_model:
@@ -128,19 +141,17 @@ class Model(Trackable):
         else:
             validation_dataset = None
 
-        progress_bar = trange(len(dataset), bar_format='{l_bar}{bar:40}{r_bar}{bar:-20b}', ascii=' =')
-        
         for epoch in range(1, epochs+1):
             metrics = {}
-            for _ in progress_bar:
-                batch_x, batch_y = dataset.get_batch()
-                loss = self.train_step(batch_x, batch_y)
-                metrics.update(loss)
-                validation_loss = self._test_step(validation_dataset)
-                metrics.update(loss)
-                progress_bar.set_postfix(**metrics)
-            progress_bar.refresh()
+            with trange(len(dataset), bar_format='{l_bar}{bar:40}{r_bar}{bar:-20b}', ascii=' =', unit='batch') as prog_bar:
+                for _ in prog_bar:
+                    batch_x, batch_y = dataset.get_batch()
+                    loss = self.train_step(batch_x, batch_y)
+                    metrics.update(loss)
+                    validation_loss = self._test_step(validation_dataset)
+                    metrics.update(loss)
 
+                    prog_bar.set_postfix(**metrics)
 
 class Sequential(Model):
     def __init__(self, layers=None, **kwargs):

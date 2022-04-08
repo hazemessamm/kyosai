@@ -9,6 +9,9 @@ SoftPlus = softplus
 Swish = swish
 ReLU6 = relu6
 
+def identity(inputs):
+    return inputs
+
 supported_activations = {
     'celu': celu,
     'elu': elu,
@@ -30,11 +33,14 @@ supported_activations = {
     'softplus': softplus,
     'swish': swish,
     'leaky_relu': leaky_relu,
+    'identity': identity
 }
+
+
 
 def get(identifier):
     if identifier is None:
-        return None
+        return identity
     elif callable(identifier):
         return identifier
     elif isinstance(identifier, str):

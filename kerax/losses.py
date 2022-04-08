@@ -49,7 +49,8 @@ class CategoricalCrossEntropy(Loss):
         y_preds = self.model.call_with_external_weights(params, x)
         y_preds = jnp.clip(y_preds, self.epsilon, 1. - self.epsilon)
         num_samples = y_preds.shape[0]
-        return -jnp.sum(y*jnp.log(y_preds+1e-9))/num_samples
+        return -jnp.sum(y * jnp.log(y_preds + 1e-9)) / num_samples
+
 
 class MeanSquaredError(Loss):
     def __init__(self, model, reduction=None, name=None):

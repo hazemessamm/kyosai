@@ -5,6 +5,9 @@ from .core import Dense, Layer
 
 
 class Attention(Layer):
+    def __init__(self):
+        super(Attention, self).__init__()
+
     def attention_op(self, query, key, value, mask=None):
         d_model = query.shape[-1]
         scores = jnp.divide(jnp.matmul(query, key.transpose(0, 2, 1)), jnp.sqrt(d_model))
@@ -32,8 +35,6 @@ class MultiHeadAttention(Attention):
         self.use_bias = use_bias
         self.activation = activation
 
-        
-        
         self.q = Dense(embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable)
         self.k = Dense(embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable)
         self.v = Dense(embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable)

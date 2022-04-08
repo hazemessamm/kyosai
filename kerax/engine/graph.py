@@ -1,70 +1,51 @@
-from collections import deque, namedtuple, OrderedDict
+from collections import OrderedDict
 
+import jax
+from jax import lax
 from jax import numpy as jnp
-from kerax.layers.core import Input
 
-import itertools
-import generic_utils
+from . import generic_utils
 
 
 class GraphV2:
-    allowed_kwargs = {'input', 'inputs', 'output', 'outputs'}
+    allowed_kwargs = {'inputs', 'outputs'}
     def __init__(self, *args, **kwargs):
         self.inputs, self.outputs = self._check_args_and_kwargs(*args, **kwargs)
         branches, self.multiple_branches = self.get_branches()
-        self.layers, self.dependencies, self.params = self.create_graph(branches)
+        self.dependencies, self.layers, self.params, self.layer_functions = self.create_graph(branches)
 
     def flatten(self, inputs):
         if isinstance(inputs, (list, tuple)):
             return generic_utils.flatten(inputs)
         else:
             return [inputs]
-    
+
+
     def _check_args_and_kwargs(self, *args, **kwargs):
-        inputs, outputs = self._check_args(*args)
-
-        if not inputs and not outputs:
-            inputs, outputs = self._check_kwargs(**kwargs)
-            if not inputs and not outputs:
-                raise Exception('Cannot create a Model without inputs or outputs')
-            else:
-                return inputs, outputs
-        else:
-            return inputs, outputs
-
-
-    def _check_args(self, *args):
-        if len(args) == 0:
-            return None, None
-        inputs = self.flatten(args[0])
-        outputs = self.flatten(args[1])
-        return inputs, outputs
-
-
-    def _check_kwargs(self, **kwargs):
-        if len(kwargs) == 0:
-            return None, None
-        
-        for k, v in kwargs.items():
+        for k in kwargs.keys():
             if k not in GraphV2.allowed_kwargs:
-                raise Exception(f'Unknown argument {k}')
+                raise Exception(f'unknown argument {k}')
+
+        
+        consumed_args = 0
+        if kwargs.get('inputs', False):
+            inputs = self.flatten(kwargs['inputs'])
+        else:
+            if len(args) == 0:
+                raise Exception('Input is not passed correctly')
             else:
-                if k == 'input' or k == 'inputs':
-                    if k == 'input' and isinstance(v, (list, tuple)):
-                        raise Exception(f'Expected a single element found an element in a {type(v)}')
-                    elif k == 'inputs' and not isinstance(v, (list, tuple)):
-                        raise Exception(f'Expected the element to be found in a list or a tuple found {type(v)}')
-                    else:
-                        inputs = self.flatten(v)
-                    
-                elif k == 'output' or k == 'outputs':
-                    if k == 'output' and isinstance(v, (list, tuple)):
-                        raise Exception(f'Expected a single element found an element in a {type(v)}')
-                    elif k == 'outputs' and not isinstance(v, (list, tuple)):
-                        raise Exception(f'Expected the element to be found in a list or a tuple found {type(v)}')
-                    else:
-                        outputs = self.flatten(v)
+                inputs = self.flatten(args[consumed_args])
+                consumed_args += 1
+
+        if kwargs.get('outputs', False):
+            outputs = self.flatten(kwargs['outputs'])
+        else:
+            if len(args) == 0:
+                raise Exception('Output is not passed correctly')
+            else:
+                outputs = self.flatten(args[consumed_args])
         return inputs, outputs
+
 
 
     def get_branches(self):
@@ -72,63 +53,102 @@ class GraphV2:
         multiple_branches = len(branches) > 1
 
         main_layers = OrderedDict()
-        def _traverse(root, branch_index, visited):
+        def _traverse(root, branch_index):
             nonlocal branches
-            for r in root._node_container.outbound_nodes:
-                if r.name not in visited:
-                    visited.add(r.name)
-                    if branch_index > 0 and r.name in branches[branch_index-1] and r.name not in main_layers:
-                        del(branches[branch_index-1][r.name])
-                        main_layers[r.name] = r
-                    elif r.name in main_layers:
+            for layer in root._node_container.outbound_nodes:
+                if layer.name not in branches[branch_index]:
+                    if branch_index > 0 and layer.name in branches[branch_index-1] and layer.name not in main_layers:
+                        del(branches[branch_index-1][layer.name])
+                        main_layers[layer.name] = layer
+                    elif layer.name in main_layers:
                         continue
                     else:
-                        branches[branch_index][r.name] = r
-                    
-                    _traverse(r, branch_index, visited)
+                        branches[branch_index][layer.name] = layer
+                    _traverse(layer, branch_index)
 
         for branch_index, _input in enumerate(self.inputs, start=0):
-            _traverse(root=_input, branch_index=branch_index, visited=set())
+            _traverse(root=_input, branch_index=branch_index)
 
+        # Append the main branch of the network that all the branches are added to or concatenated to etc...
+        branches.append(main_layers)
         return branches, multiple_branches
 
-    def create_graph(self, branches):
-        requires_output_from = OrderedDict()
-        # requires_output_to = OrderedDict()
-        layers = OrderedDict([(layer_name, layer) for branch in branches for layer_name, layer in branch.items()])
-        for layer_name, layer in layers.items():
-            required_outputs_from = [node.name for node in layer._node_container.inbound_nodes]
-            requires_output_from[layer_name] = required_outputs_from
-            # required_outputs_to = [node.name for node in layer._node_container.outbound_nodes]
-            # requires_output_to[layer_name] = required_outputs_to
 
-        params = [layers[layer_name].params for layer_name in requires_output_from.keys()]
-        return layers, requires_output_from, params
+    def _make_function(self, layer, multiple_dependencies, is_input_layer=False, input_layer_index=None, multiple_branches=False):
+        requires_unpacking = layer.call_with_external_weights.__code__.co_argcount > 3
+        _call = None
+
+        if not is_input_layer:
+            if requires_unpacking and multiple_dependencies:
+                # returning a function that recieves multiple outputs from other layers and unpack them
+                def _call_mult_outs(params, inputs):
+                    return layer.call_with_external_weights(params, *inputs)
+                return _call_mult_outs
+            elif not requires_unpacking and multiple_dependencies:
+                # returning a function that recieves multiple outputs from other layers
+                def _call_mult_deps(params, inputs):
+                    return layer.call_with_external_weights(params, inputs)
+                return _call_mult_deps
+            elif not multiple_dependencies:
+                # returning a function that recieves single output from other layer
+                def _call_single_dep(params, inputs):
+                    return layer.call_with_external_weights(params, inputs[0])
+                return _call_single_dep
+        else:
+            if multiple_branches:
+                # returning a function that recieves an input but in a list
+                # and has multiple input layers
+                def _call_mult_inputs(params, inputs):
+                    return layer.call_with_external_weights(params, inputs[input_layer_index])
+                return _call_mult_inputs
+            else:
+                # returning a function that recieves a single input for single
+                # input layer
+                def _call_single_input(params, inputs):
+                    return layer.call_with_external_weights(params, inputs)
+                return _call_single_input
+        return _call
+
+    def create_graph(self, branches):
+        dependencies = OrderedDict()
+        layers = OrderedDict()
+        parameters = []
+        layer_functions = OrderedDict()
+        num_input_layers = 0
+        for branch in branches:
+            for layer_name, layer in branch.items():
+                layers[layer_name] = layer
+                required_outputs_from = [node.name for node in layer._node_container.inbound_nodes]
+                dependencies[layer_name] = required_outputs_from
+                if len(required_outputs_from) == 0:
+                    layer_fn = self._make_function(layer, len(required_outputs_from) > 1, True, num_input_layers, self.multiple_branches)
+                    num_input_layers += 1
+                else:
+                    layer_fn = self._make_function(layer, len(required_outputs_from) > 1)
+
+                if layer_fn is not None:
+                    layer_functions[layer_name] = layer_fn
+                else:
+                    raise Exception(f'Cannot find an appropriate function for that layer {layer_name}')
+                parameters.append(layer.params)
+        return dependencies, layers, parameters, layer_functions
 
     
     def update_params(self, new_params):
         for param, layer_name in zip(new_params, self.dependencies.keys()):
             self.layers[layer_name].update_weights(param)
     
-
-    def call_with_external_weights(self, params, tensors):
-        saved_outputs = OrderedDict()
-        consumed_indices = 0
+    def call_with_external_weights(self, params, inputs):
+        saved_outputs = {}
         for param, (key, val) in zip(params, self.dependencies.items()):
+
             if len(val) == 0:
-                saved_outputs[key] = self.layers[key].call_with_external_weights(param, tensors[consumed_indices])
-                consumed_indices += 1
+                saved_outputs[key] = self.layer_functions[key](param, inputs)
             else:
-                if len(val) == 1:
-                    saved_outputs[key] = self.layers[key].call_with_external_weights(param, saved_outputs[val[0]])
-                else:
-                    requires_unpacking = self.layers[key].call_with_external_weights.__code__.co_argcount > 3
-                    if requires_unpacking:
-                        saved_outputs[key] = self.layers[key].call_with_external_weights(param, *[saved_outputs[v] for v in val])
-                    else:
-                        saved_outputs[key] = self.layers[key].call_with_external_weights(param, [saved_outputs[v] for v in val])
-        if self.multiple_branches:
-            return [saved_outputs[layer.name] for layer in self.outputs]
+                saved_outputs[key] = self.layer_functions[key](param, [saved_outputs[v] for v in val])
+        
+        if len(self.outputs) > 1:
+            return jnp.stack([saved_outputs[layer.name] for layer in self.outputs], axis=1)
         else:
             return saved_outputs[self.outputs[0].name]
 
