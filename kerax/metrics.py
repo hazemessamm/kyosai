@@ -4,15 +4,12 @@ from . import utils
 from . import losses
 
 
-
 class Metric(Trackable):
     def __init__(self, name=None):
         self.name = name
 
-
     def __call__(self, x, y):
-        raise NotImplementedError('Should be implemented in a subclass')
-
+        raise NotImplementedError("Should be implemented in a subclass")
 
 
 class Accuracy(Metric):
@@ -25,12 +22,11 @@ class Accuracy(Metric):
         if y_pred.shape[-1] > 1:
             y_pred = utils.to_numbers(y_pred)
         accuracy = jnp.sum(y_true == y_pred)
-        return (accuracy / y_true.shape[0])
+        return accuracy / y_true.shape[0]
 
 
-supported_metrics = {
-    'accuracy': Accuracy
-}
+supported_metrics = {"accuracy": Accuracy}
+
 
 def get(identifier):
     if identifier is None:

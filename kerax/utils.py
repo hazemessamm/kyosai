@@ -1,4 +1,4 @@
-from jax import numpy as jnp #type: ignore
+from jax import numpy as jnp  # type: ignore
 
 
 def to_categorical(inputs, num_classes=None):
@@ -8,7 +8,7 @@ def to_categorical(inputs, num_classes=None):
 
 
 def to_numbers(inputs, axis=-1):
-  return jnp.argmax(inputs, axis=axis)
+    return jnp.argmax(inputs, axis=axis)
 
 
 class Sequence:

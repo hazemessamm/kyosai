@@ -2,8 +2,17 @@ from jax.numpy import DeviceArray
 from jax.random import PRNGKey
 from kerax.initializers import Initializer, initializers
 
+
 class Weight:
-    def __init__(self, key: PRNGKey, shape: tuple, initializer: Initializer, dtype: str, name: str, trainable: bool):
+    def __init__(
+        self,
+        key: PRNGKey,
+        shape: tuple,
+        initializer: Initializer,
+        dtype: str,
+        name: str,
+        trainable: bool,
+    ):
         self.key = key
         self.shape = shape
         self.initializer = initializers.get(initializer)
@@ -24,18 +33,20 @@ class Weight:
             if (self.weights.shape == weights.shape) and (self.dtype == weights.dtype):
                 self.weights = weights
             else:
-                raise Exception(f'New weights shape does not match the current weights shape, {self.weights.shape} != {weights.shape}')
+                raise Exception(
+                    f"New weights shape does not match the current weights shape, {self.weights.shape} != {weights.shape}"
+                )
         else:
-            raise Exception(f'Weights are not initialized yet. Use get_weights() method to initialize the weights')
-
+            raise Exception(
+                f"Weights are not initialized yet. Use get_weights() method to initialize the weights"
+            )
 
     def update_weights(self, weights: DeviceArray):
         if self.trainable:
             self.set_weights(weights)
 
-
     def __repr__(self) -> str:
-        return f'{self.name} with shape {self.shape}>'
+        return f"{self.name} with shape {self.shape}>"
 
 
 class NodeContainer:

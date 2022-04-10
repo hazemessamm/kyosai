@@ -1,6 +1,3 @@
-
-
-
 def flatten(x):
     def _flatten(x, result=[]):
         for i in x:
@@ -9,4 +6,5 @@ def flatten(x):
             else:
                 result.append(i)
         return result
+
     return _flatten(x, [])
