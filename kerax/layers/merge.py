@@ -117,7 +117,7 @@ class Add(Merge):
         return jnp.sum(inputs, axis=0)
 
     def build(self, input_shape: Tuple):
-        super().build()
+        super().build(input_shape)
 
     def call(self, inputs: DeviceArray):
         return self.add_op(self._params, inputs)
