@@ -1,11 +1,10 @@
 import operator as op
 from functools import reduce
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable, Tuple, Union, List
 
 from jax import lax
 from jax import numpy as jnp
 from jax import random
-from jax.example_libraries import stax
 from jax.numpy import DeviceArray
 from jax.random import PRNGKey
 from kerax import activations, backend
@@ -19,7 +18,7 @@ import layer_utils
 
 class InputSpec:
     def __init__(self):
-        self.input_shape = None 
+        self.input_shape = None
         self.valid_ndims = None
         self._internal_input_shape = None
 
@@ -74,6 +73,9 @@ class Layer(Trackable):
     @property
     def shape(self):
         return None
+
+    def compute_output_shape(self, input_shape: Union[List, Tuple]):
+        raise NotImplementedError("should be implemented in a subclass.")
 
     @property
     def input_shape(self):
@@ -146,19 +148,22 @@ class Layer(Trackable):
             if self.built:
                 return self.call(inputs, *args, **kwargs)
 
-            # if the inputs are a list of layers
+            # If the inputs are a list of layers
             if all([isinstance(_input, Layer) for _input in inputs]):
                 self.build([_input.shape for _input in inputs])
                 self.connect(inputs)
                 return self
-
-            # if the inputs are list of tensors
+            # If the inputs are list of tensors
             elif all([isinstance(_input, (ndarray, DeviceArray)) for _input in inputs]):
                 self.build([_input.shape for _input in inputs])
                 return self.call(inputs, *args, **kwargs)
+            else:
+                raise ValueError(
+                    f"Unsupported inputs type. Recieved inputs with type {type(inputs)}"
+                )
         elif isinstance(inputs, Layer):
             if self.built:
-                raise Exception(
+                raise ValueError(
                     f"Error in layer {self.name}, this layer is already built, you cannot pass any more layers to it"
                 )
             else:
@@ -189,76 +194,6 @@ class Layer(Trackable):
 
     def __name__(self):
         return self.name
-
-
-class Pooling(Layer):
-    def __init__(
-        self,
-        pool_size: Union[int, Tuple] = (2, 2),
-        strides: Union[int, Tuple] = (2, 2),
-        padding: str = "valid",
-        seed: int = None,
-        dtype="float32",
-        name=None,
-        **kwargs,
-    ):
-        super(Pooling, self).__init__(
-            seed=seed, trainable=False, dtype=dtype, name=name, **kwargs
-        )
-        self.pool_size = pool_size
-        self.strides = strides
-        self.padding = padding
-        self._validate_init()
-
-        input_shape = kwargs.get("input_shape", False)
-        if input_shape:
-            self.build(input_shape)
-
-    def _validate_init(self):
-        if isinstance(self.pool_size, int):
-            self.pool_size = (self.pool_size, self.pool_size)
-        elif isinstance(self.pool_size, tuple) and len(self.pool_size) == 1:
-            self.pool_size += self.pool_size
-
-        if isinstance(self.strides, int):
-            self.strides = (self.strides, self.strides)
-        elif isinstance(self.strides, tuple) and len(self.strides) == 1:
-            self.strides += self.strides
-
-        self.padding = self.padding.upper()
-
-        self._pool_size = self.pool_size
-        self._strides = self.strides
-
-        self.pool_size = (1, *self.pool_size, 1)
-        self.strides = (1, *self.strides, 1)
-
-    def compute_output_shape(self):
-        # lax.reduce_window_shape_tuple() does not accept batch size with None
-        # so it's replaced with '1' only in this function
-        input_shape = (1, *self._input_shape[1:])
-        padding_vals = lax.padtype_to_pads(
-            input_shape, self.pool_size, self.strides, self.padding
-        )
-
-        out_shape = lax.reduce_window_shape_tuple(
-            operand_shape=input_shape,
-            window_dimensions=self.pool_size,
-            window_strides=self.strides,
-            padding=padding_vals,
-            base_dilation=(1, 1, 1, 1),
-            window_dilation=(1, 1, 1, 1),
-        )
-        return out_shape
-
-    @property
-    def shape(self):
-        return self._shape
-
-    def build(self, input_shape: Tuple):
-        self._input_shape = input_shape
-        self._shape = (None, *self.compute_output_shape()[1:])
-        self.built = True
 
 
 class Input(Layer):
@@ -502,114 +437,3 @@ class Activation(Layer):
 
     def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         return self.activation_op(params, inputs)
-
-
-class Concatenate(Layer):
-    def __init__(self, axis: int = -1, name: str = None, **kwargs):
-        super(Concatenate, self).__init__(seed=0, name=name, **kwargs)
-        self.axis = axis
-
-    @property
-    def shape(self):
-        return self._output_shape
-
-    @property
-    def input_shape(self):
-        return self._input_shape
-
-    def build(self, input_shape: Tuple):
-        if not isinstance(input_shape, list) or len(input_shape) <= 1:
-            raise Exception(
-                "Input shapes should be passed as a list with more than one value in it to the build() method"
-            )
-        else:
-            first_shape = input_shape[0][self.axis]
-            for curr_shape in input_shape[1:]:
-                if curr_shape[self.axis] != first_shape:
-                    raise Exception(
-                        f"Input shapes should have the same dimension at axis {self.axis}"
-                    )
-
-        self._input_shape = input_shape[0]
-        self._output_shape = (
-            *input_shape[0][:-1],
-            sum([i[self.axis] for i in input_shape]),
-        )
-        self.built = True
-
-    def concatenate_op(self, params: Tuple, inputs: DeviceArray):
-        return jnp.concatenate(inputs, axis=self.axis)
-
-    def call(self, inputs: DeviceArray):
-        return self.concatenate_op(self.params, inputs)
-
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
-        return self.concatenate_op(params, inputs)
-
-
-class Add(Layer):
-    def __init__(self, name: str = None, **kwargs):
-        super(Add, self).__init__(seed=0, name=name, **kwargs)
-
-    @property
-    def shape(self):
-        return self._output_shape
-
-    @property
-    def compute_output_shape(self):
-        return self._output_shape
-
-    def add_op(self, params: Tuple, inputs: DeviceArray):
-        inputs = jnp.stack(inputs, axis=0)
-        return jnp.sum(inputs, axis=0)
-
-    def build(self, input_shape: Tuple):
-        if not isinstance(input_shape, list) or len(input_shape) <= 1:
-            raise Exception(
-                "Input shapes should be passed as a list with more than one value in it to the build() method"
-            )
-        else:
-            first_shape = input_shape[0]
-            for curr_shape in input_shape[1:]:
-                if curr_shape != first_shape:
-                    raise Exception("Input shapes should have the same last dimension")
-
-        self._input_shape, self._output_shape = input_shape[0], input_shape[0]
-        self.built = True
-
-    def call(self, inputs: DeviceArray):
-        return self.add_op(self._params, inputs)
-
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
-        return self.add_op(params, inputs)
-
-
-# TODO: Should remove stax and re-write it.
-class BatchNormalization(Layer):
-    def __init__(
-        self,
-        seed: int = None,
-        trainable: bool = True,
-        axis: int = -1,
-        name: str = None,
-        **kwargs,
-    ):
-        super(BatchNormalization, self).__init__(
-            seed=seed, trainable=trainable, **kwargs
-        )
-        self.axis = axis
-        self.name = name
-
-    def build(self, input_shape: tuple):
-        init_fun, self.apply_fn = stax.BatchNorm(axis=self.axis)
-        self.shape, self._params = init_fun(rng=self.key, input_shape=input_shape)
-        self.input_shape = self.shape
-        self.built = True
-
-    def call(self, inputs: DeviceArray):
-        output = self.apply_fn(params=self._params, x=inputs)
-        return output
-
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
-        output = self.apply_fn(params=params, inputs=inputs)
-        return output

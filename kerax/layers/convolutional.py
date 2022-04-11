@@ -5,7 +5,7 @@ from jax import numpy as jnp
 from jax import random
 from jax.numpy import DeviceArray
 
-from .core import Layer, Pooling
+from .core import Layer
 
 
 class Conv2D(Layer):
@@ -165,95 +165,3 @@ class Conv2D(Layer):
 
     def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         return self.convolution_op(params, inputs)
-
-
-class MaxPool2D(Pooling):
-    """
-    MaxPool Layer, (Layer subclass)
-    Params:
-        - pool_size: takes the pooling size, default (2,2), accepts int or tuple
-        - strides: stores size of the strides, default (1,1), accepts int or tuple
-        - padding: padding for the input, accepts "valid" or "same"
-        - spec: store the layer specs
-        - key: stores Pseudo Random Generator Key, default PRNGKey(1)
-    """
-
-    def __init__(
-        self,
-        pool_size: Union[int, Tuple] = (2, 2),
-        strides: Union[int, Tuple] = (2, 2),
-        padding: str = "valid",
-        seed: int = None,
-        dtype="float32",
-        name=None,
-        **kwargs,
-    ):
-        super(MaxPool2D, self).__init__(
-            pool_size=pool_size,
-            strides=strides,
-            padding=padding,
-            seed=seed,
-            dtype=dtype,
-            name=name,
-            expand_dims=True,
-            **kwargs,
-        )
-
-    def maxpool_op(self, params: Tuple, inputs: DeviceArray):
-        return lax.reduce_window(
-            inputs, -jnp.inf, lax.max, self.pool_size, self.strides, self.padding
-        )
-
-    def call(self, inputs: DeviceArray):
-        self.output = self.maxpool_op(self.params, inputs)
-        return self.output
-
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
-        self.output = self.maxpool_op(params, inputs)
-        return self.output
-
-
-class AveragePooling2D(Pooling):
-    def __init__(
-        self,
-        pool_size=(2, 2),
-        strides=(2, 2),
-        padding="valid",
-        seed=None,
-        dtype="float32",
-        name=None,
-        **kwargs,
-    ):
-        super(AveragePooling2D, self).__init__(
-            pool_size=pool_size,
-            strides=strides,
-            padding=padding,
-            seed=seed,
-            dtype=dtype,
-            name=name,
-            expand_dims=False,
-            **kwargs,
-        )
-
-    def rescale(self, outputs, inputs):
-        one = jnp.ones((1, inputs.shape[1], inputs.shape[2], 1), dtype=inputs.dtype)
-        window_sizes = lax.reduce_window(
-            one, 0.0, lax.add, self.pool_size, self.strides, self.padding
-        )
-        return outputs / window_sizes
-
-    def avgpool_op(self, params: Tuple, inputs: DeviceArray):
-        out = lax.reduce_window(
-            inputs, 0.0, lax.add, self.pool_size, self.strides, self.padding
-        )
-        return self.rescale(out, inputs)
-
-    def call(self, inputs):
-        return self.avgpool_op(self.params, inputs)
-
-    def call_with_external_weights(self, params, inputs):
-        return self.avgpool_op(params, inputs)
-
-
-class Conv2DTranspose(Layer):
-    pass

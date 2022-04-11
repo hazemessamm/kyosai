@@ -1,7 +1,7 @@
 from jax import numpy as jnp  # type: ignore
 from jax import random  # type: ignore
 
-from .core import Input, Layer
+from .core import Layer
 
 
 class Embedding(Layer):
