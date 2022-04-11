@@ -19,7 +19,7 @@ import layer_utils
 
 class InputSpec:
     def __init__(self):
-        self.input_shape = None
+        self.input_shape = None 
         self.valid_ndims = None
         self._internal_input_shape = None
 
@@ -439,7 +439,6 @@ class Dropout(Layer):
     def __init__(self, rate: float, seed: int = None, **kwargs):
         super(Dropout, self).__init__(seed=seed, **kwargs)
         self.rate = rate
-        self.seed = key
 
     @property
     def compute_output_shape(self):
@@ -454,7 +453,7 @@ class Dropout(Layer):
         self.built = True
 
     def dropout_op(self, params: Tuple, inputs: DeviceArray):
-        keep = random.bernoulli(self.key, self.rate, inputs.shape)
+        keep = random.bernoulli(self.seed, self.rate, inputs.shape)
         return jnp.where(keep, inputs / self.rate, 0)
 
     def call(self, inputs: DeviceArray, training=False):
