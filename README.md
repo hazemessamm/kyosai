@@ -35,16 +35,16 @@ y_train = y_train.astype('float32')
 y_train = to_categorical(y_train, 10)
 
 
-#This model is just a toy model for testing that everything works
-inputs = Input((28, 28, 1))
-conv1 = Conv2D(64, 3, activation=activations.ReLU, key=PRNGKey(100))(inputs)
-act1 = Activation('relu')(conv1)
-conv3 = Conv2D(128, 3, padding='same', key=PRNGKey(104))(act1)
-act2 = Activation('relu')(conv3)
-conv4 = Conv2D(128, 3, padding='same', key=PRNGKey(105))(act2)
-flatten = Flatten()(conv4)
-dense1 = Dense(512, activation='relu')(flatten)
-dense2 = Dense(10, activation='softmax')(dense1)
+# This model is just a toy model for demo.
+inputs = layers.Input((28, 28, 1))
+conv1 = layers.Conv2D(64, 3, activation=activations.ReLU, seed=100)(inputs)
+act1 = layers.Activation('relu')(conv1)
+conv2 = layers.Conv2D(128, 3, padding='same', seed=101)(act1)
+act2 = layers.Activation('relu')(conv2)
+conv3 = layers.Conv2D(128, 3, padding='same', seed=101)(act2)
+flatten = layers.Flatten()(conv4)
+dense1 = layers.Dense(512, activation='relu', seed=101)(flatten)
+dense2 = layers.Dense(10, activation='softmax', seed=101)(dense1)
 
 model = kerax.Model(inputs, output)
 
@@ -58,4 +58,4 @@ model.fit(x_train, y_train, epochs=40, batch_size=64)
 ---
 
 
-### Currently It's not fully ready, so there is no setup.py file
+## Currently, it's not fully ready, so there is no setup.py file.
