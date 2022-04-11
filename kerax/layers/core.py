@@ -1,8 +1,8 @@
 import operator as op
 from functools import reduce
-from typing import Any, Callable, OrderedDict, Tuple, Union
+from typing import Any, Callable, Tuple, Union
 
-from jax import jit, lax
+from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax.example_libraries import stax
@@ -13,6 +13,8 @@ from kerax.engine import Trackable
 from kerax.engine.containers import NodeContainer, Weight
 from kerax.initializers import Initializer, initializers
 from numpy import ndarray
+
+import layer_utils
 
 
 class InputSpec:
@@ -35,22 +37,24 @@ class InputSpec:
 class Layer(Trackable):
     def __init__(
         self,
-        key: PRNGKey = False,
+        seed: int = None,
         trainable: bool = True,
         dtype: str = "float32",
         name: str = None,
-        *args,
         **kwargs,
     ):
         super(Layer, self).__init__(self.__class__.__name__ if name is None else name)
+
+        layer_utils._check_seed(seed)
+        layer_utils.check_jit(self)
+
         # Stores the layer params
         self._params = []
         # Stores the previous layer
         self._node_container = NodeContainer()
         self.built = False
-        self.key = key
+        self.seed = PRNGKey(seed)
         self.trainable = trainable
-        self.output = None
         self.dtype = dtype or backend.precision()
         self._has_nested_layers = False
         self._is_nested = False
@@ -66,10 +70,6 @@ class Layer(Trackable):
 
             __value._is_nested = True
         return super().__setattr__(__name, __value)
-
-    def check_jit(self):
-        if backend.is_jit_enabled():
-            self.call = jit(self.call)
 
     @property
     def shape(self):
@@ -172,7 +172,7 @@ class Layer(Trackable):
                 self.build(inputs.shape)
                 return self.call(inputs, *args, **kwargs)
         else:
-            raise Exception(
+            raise ValueError(
                 f"Error in layer {self.name}, {type(inputs)} is not supported, supported: (list, tuple, Layer, DeviceArray, ndarray)"
             )
 
@@ -197,13 +197,13 @@ class Pooling(Layer):
         pool_size: Union[int, Tuple] = (2, 2),
         strides: Union[int, Tuple] = (2, 2),
         padding: str = "valid",
-        key: PRNGKey = PRNGKey(1),
+        seed: int = None,
         dtype="float32",
         name=None,
         **kwargs,
     ):
         super(Pooling, self).__init__(
-            key=key, trainable=False, dtype=dtype, name=name, **kwargs
+            seed=seed, trainable=False, dtype=dtype, name=name, **kwargs
         )
         self.pool_size = pool_size
         self.strides = strides
@@ -269,7 +269,7 @@ class Input(Layer):
     """
 
     def __init__(self, shape: Tuple = None, dtype: str = "float32", name: str = None):
-        super().__init__(key=None, trainable=False, dtype=dtype, name=name)
+        super(Input, self).__init__(seed=0, trainable=False, dtype=dtype, name=name)
         if not shape or not isinstance(shape, tuple):
             raise Exception(
                 f"shape should have value in a tuple, found {shape} with type {type(shape)}"
@@ -322,13 +322,12 @@ class Dense(Layer):
         bias_initializer: Union[str, Callable] = "normal",
         use_bias: bool = True,
         trainable: bool = True,
-        key: PRNGKey = PRNGKey(100),
+        seed: int = None,
         dtype: str = "float32",
-        *args,
         **kwargs,
     ):
         super(Dense, self).__init__(
-            key=key, trainable=trainable, dtype=dtype, *args, **kwargs
+            seed=seed, trainable=trainable, dtype=dtype, **kwargs
         )
         self.units = units
         self.activation = self.get_activation(activation)
@@ -355,7 +354,7 @@ class Dense(Layer):
 
     def build(self, input_shape: Tuple):
         self._input_shape = (input_shape[-1],)
-        k1, k2 = random.split(self.key)
+        k1, k2 = random.split(self.seed)
         self.kernel_weights = self.add_weight(
             k1,
             (input_shape[-1], self.units),
@@ -401,8 +400,8 @@ class Flatten(Layer):
 
     """
 
-    def __init__(self, *args, **kwargs):
-        super(Flatten, self).__init__(key=None, trainable=False, *args, **kwargs)
+    def __init__(self, **kwargs):
+        super(Flatten, self).__init__(seed=0, trainable=False, **kwargs)
 
     @property
     def compute_output_shape(self):
@@ -437,10 +436,10 @@ class Dropout(Layer):
     key: Pseudo Random Generator Key, default PRNGKey(1)
     """
 
-    def __init__(self, rate: float, key: PRNGKey = PRNGKey(1), *args, **kwargs):
-        super(Dropout, self).__init__(key=key, *args, **kwargs)
+    def __init__(self, rate: float, seed: int = None, **kwargs):
+        super(Dropout, self).__init__(seed=seed, **kwargs)
         self.rate = rate
-        self.key = key
+        self.seed = key
 
     @property
     def compute_output_shape(self):
@@ -475,8 +474,8 @@ class Activation(Layer):
     identifier: accepts the activation function as a string or callable
     """
 
-    def __init__(self, identifier: Union[str, Callable], *args, **kwargs):
-        super(Activation, self).__init__(key=None, *args, **kwargs)
+    def __init__(self, identifier: Union[str, Callable], **kwargs):
+        super(Activation, self).__init__(seed=0, **kwargs)
         self._identifier = identifier
         self.activation = activations.get(identifier)
 
@@ -507,8 +506,8 @@ class Activation(Layer):
 
 
 class Concatenate(Layer):
-    def __init__(self, axis: int = -1, name: str = None, *args, **kwargs):
-        super(Concatenate, self).__init__(name=name, *args, **kwargs)
+    def __init__(self, axis: int = -1, name: str = None, **kwargs):
+        super(Concatenate, self).__init__(seed=0, name=name, **kwargs)
         self.axis = axis
 
     @property
@@ -550,8 +549,8 @@ class Concatenate(Layer):
 
 
 class Add(Layer):
-    def __init__(self, name: str = None, *args, **kwargs):
-        super(Add, self).__init__(name=name, *args, **kwargs)
+    def __init__(self, name: str = None, **kwargs):
+        super(Add, self).__init__(seed=0, name=name, **kwargs)
 
     @property
     def shape(self):
@@ -590,15 +589,14 @@ class Add(Layer):
 class BatchNormalization(Layer):
     def __init__(
         self,
-        key: PRNGKey = PRNGKey(100),
+        seed: int = None,
         trainable: bool = True,
         axis: int = -1,
         name: str = None,
-        *args,
         **kwargs,
     ):
         super(BatchNormalization, self).__init__(
-            key=key, trainable=trainable, *args, **kwargs
+            seed=seed, trainable=trainable, **kwargs
         )
         self.axis = axis
         self.name = name

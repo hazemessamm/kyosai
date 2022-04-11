@@ -1,7 +1,6 @@
 from jax import numpy as jnp
 from kerax.engine import Trackable
 from . import utils
-from . import losses
 
 
 class Metric(Trackable):
@@ -36,4 +35,4 @@ def get(identifier):
     elif isinstance(identifier, str):
         return supported_metrics.get(identifier, None)
     else:
-        raise Exception("Cannot find the specified identifier")
+        raise Exception(f"Cannot find the specified identifier. Recieved: {identifier}")

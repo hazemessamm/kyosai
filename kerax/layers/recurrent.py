@@ -4,10 +4,19 @@ from layers import Input, Layer
 
 
 class GRU(Layer):
-    def __init__(self, units, activation='tanh', recurrent_activation='sigmoid', 
-    use_bias=True, kernel_initializer='glorot_uniform', 
-    recurrent_initializer='orthogonal', bias_initializer='zeros', dropout=0.0, recurrent_dropout=0.0, 
-    return_sequences=False):
+    def __init__(
+        self,
+        units,
+        activation="tanh",
+        recurrent_activation="sigmoid",
+        use_bias=True,
+        kernel_initializer="glorot_uniform",
+        recurrent_initializer="orthogonal",
+        bias_initializer="zeros",
+        dropout=0.0,
+        recurrent_dropout=0.0,
+        return_sequences=False,
+    ):
         self.units = units
         self.activation = activation
         self.recurrent_activation = recurrent_activation
@@ -20,12 +29,6 @@ class GRU(Layer):
         self.return_sequences = return_sequences
 
 
-
 class LSTM(Layer):
     def __init__(self):
         pass
-
-
-
-
-        

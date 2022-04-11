@@ -1,9 +1,16 @@
+from enum import Enum
 from typing import Union, NamedTuple
 from jax import lax
 from jax import numpy as jnp
 import optax  # type:ignore
 from . import backend
 from jax import jit
+
+
+class REDUCTION(Enum):
+    SUM = "sum"
+    MEAN = "mean"
+    AUTO = "auto"
 
 
 class Reducer:
@@ -63,14 +70,14 @@ class CategoricalCrossEntropy(Loss):
         if with_logits:
             self.call = self._call_with_logits
         else:
-            self.call = self._call_without_logits
+            self.call = self._call_with_probabilities
 
     def _call_with_logits(self, params, x, y):
         y_preds = self.model.call_with_external_weights(params, x)
         loss = jnp.sum(optax.softmax_cross_entropy(y_preds, y)) / y_preds.shape[0]
         return LossOutputs(loss, y_preds)
 
-    def _call_without_logits(self, params, x, y):
+    def _call_with_probabilities(self, params, x, y):
         y_preds = self.model.call_with_external_weights(params, x)
         y_preds = jnp.clip(y_preds, self.epsilon, 1.0 - self.epsilon)
         loss = -jnp.sum(y * jnp.log(y_preds + 1e-9)) / y_preds.shape[0]
@@ -104,17 +111,8 @@ class Huber(Loss):
 
     def call(self, params, x, y):
         y_preds = self.model.call_with_external_weights(params, x)
-        error = jnp.subtract(y_preds, y)
-        abs_error = jnp.abs(error)
-        half = jnp.array(0.5, dtype=abs_error.dtype)
-        loss = jnp.mean(
-            jnp.where(
-                abs_error <= self.delta,
-                half * jnp.square(error),
-                self.delta * abs_error - half * jnp.square(self.delta),
-            ),
-            axis=-1,
-        )
+        loss = optax.huber_loss(y_preds, y)
+        loss = jnp.sum(loss) / y_preds.shape[0]
         return LossOutputs(loss, y_preds)
 
 
@@ -130,6 +128,17 @@ class BinaryCrossEntropy(Loss):
         return LossOutputs(loss, y_preds)
 
 
+class CosineDistance(Loss):
+    def __init__(self, reduction=None, name=None):
+        super(CosineDistance, self).__init__(reduction=reduction, name=name)
+
+    def call(self, params, x, y):
+        y_preds = self.model.call_with_external_weights(params, x)
+        loss = optax.cosine_distance(y_preds, y)
+        loss = jnp.sum(loss) / y_preds.shape[0]
+        return LossOutputs(loss=loss, predictions=y_preds)
+
+
 supported_losses = {
     "binary_crossentropy": BinaryCrossEntropy,
     "categorical_crossentropy": CategoricalCrossEntropy,
@@ -137,6 +146,7 @@ supported_losses = {
     "mean_squared_error": MeanSquaredError,
     "mae": MeanAbsoluteError,
     "mean_absolute_error": MeanAbsoluteError,
+    "cosine_distance": CosineDistance,
 }
 
 

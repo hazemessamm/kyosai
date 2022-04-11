@@ -1,16 +1,13 @@
 from __future__ import absolute_import
 
 import jax
-from jax import lax
-from jax import numpy as jnp
-import optax
-from tqdm import tqdm, trange
+from tqdm import trange
 
 from kerax import losses
 from kerax import metrics as _metrics
 from kerax import optimizers
 from kerax.engine import Trackable
-from kerax.engine.data_adapter import TensorLikeDataAdapter  # type: ignore
+from kerax.engine import data_adapter
 from kerax.engine.graph import GraphV2
 from kerax.layers.core import Layer
 
@@ -73,7 +70,9 @@ class Model(Trackable):
         self.metrics_instances = {}
         if metrics is not None:
             if not isinstance(metrics, list):
-                raise Exception("metrics should be inside a list")
+                raise ValueError(
+                    f"metrics should be inside a list. Recieved: {metrics}"
+                )
             else:
                 for metric in metrics:
                     if isinstance(metric, str):
@@ -160,16 +159,15 @@ class Model(Trackable):
         shuffle=True,
         validation_data=None,
     ):
-        # If the model is not compiled then it will raise exception
         if not self.compiled:
             raise Exception("Model is not compiled, use compile() method")
 
-        dataset = TensorLikeDataAdapter(
+        dataset = data_adapter.TensorLikeDataAdapter(
             x, y, batch_size=batch_size, epochs=epochs, steps=steps, shuffle=shuffle
         )
 
         if validation_data:
-            validation_dataset = TensorLikeDataAdapter(
+            validation_dataset = data_adapter.TensorLikeDataAdapter(
                 x, y, batch_size=batch_size, epochs=epochs, steps=steps, shuffle=False
             )
         else:
@@ -219,8 +217,8 @@ class Sequential(Model):
             self._layers.append(layer)
             self.params.append(layer.params)
         else:
-            raise Exception(
-                "add() only accepts layers subclass instances or Input instance"
+            raise ValueError(
+                f"add() only accepts layers subclass instances or Input instance. Recieved layer={layer}"
             )
 
     def __call__(self, inputs):

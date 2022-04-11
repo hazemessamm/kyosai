@@ -1,10 +1,9 @@
-from typing import Callable, Union, Tuple
+from typing import Callable, Tuple, Union
 
 from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax.numpy import DeviceArray
-from jax.random import PRNGKey  # type: ignore
 
 from .core import Layer, Pooling
 
@@ -39,18 +38,17 @@ class Conv2D(Layer):
         kernel_initializer: Union[str, Callable] = "glorot_uniform",
         bias_initializer: Union[str, Callable] = "normal",
         use_bias: bool = True,
-        key: PRNGKey = PRNGKey(100),
+        seed: int = None,
         input_dim_order: str = "NHWC",
         kernel_dim_order: str = "HWIO",
         output_dim_order: str = "NHWC",
         trainable: bool = True,
         dtype="float32",
         name: str = None,
-        *args,
         **kwargs,
     ):
         super(Conv2D, self).__init__(
-            key=key, trainable=trainable, dtype=dtype, name=name, *args, **kwargs
+            seed=seed, trainable=trainable, dtype=dtype, name=name, **kwargs
         )
         self.filters = filters
         self.kernel_size = kernel_size
@@ -122,7 +120,7 @@ class Conv2D(Layer):
         if len(input_shape) == 3:
             input_shape = (None, *input_shape)
 
-        k1, k2 = random.split(self.key)
+        k1, k2 = random.split(self.seed)
         kernel_shape = self.compute_kernel_shape(input_shape)
         self.kernel_weights = self.add_weight(
             key=k1,
@@ -185,7 +183,7 @@ class MaxPool2D(Pooling):
         pool_size: Union[int, Tuple] = (2, 2),
         strides: Union[int, Tuple] = (2, 2),
         padding: str = "valid",
-        key: PRNGKey = PRNGKey(1),
+        seed: int = None,
         dtype="float32",
         name=None,
         **kwargs,
@@ -194,7 +192,7 @@ class MaxPool2D(Pooling):
             pool_size=pool_size,
             strides=strides,
             padding=padding,
-            key=key,
+            seed=seed,
             dtype=dtype,
             name=name,
             expand_dims=True,
@@ -221,7 +219,7 @@ class AveragePooling2D(Pooling):
         pool_size=(2, 2),
         strides=(2, 2),
         padding="valid",
-        key=False,
+        seed=None,
         dtype="float32",
         name=None,
         **kwargs,
@@ -230,7 +228,7 @@ class AveragePooling2D(Pooling):
             pool_size=pool_size,
             strides=strides,
             padding=padding,
-            key=key,
+            seed=seed,
             dtype=dtype,
             name=name,
             expand_dims=False,

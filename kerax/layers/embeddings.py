@@ -5,7 +5,5 @@ from .core import Input, Layer
 
 
 class Embedding(Layer):
-    #TODO: Implement Embedding Layer
+    # TODO: Implement Embedding Layer
     pass
-
-

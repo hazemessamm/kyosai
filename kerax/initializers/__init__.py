@@ -11,5 +11,5 @@ from .initializers import (
     KaimingUniform,
     LecunNormal,
     LecunUniform,
-    get  
+    get,
 )

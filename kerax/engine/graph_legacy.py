@@ -2,7 +2,7 @@ class Graph:
     def __init__(self, **kwargs):
         self._validate_init(**kwargs)
         self.connected_layers = []
-        self.connection = namedtuple('Layer', ['layer1', 'layer2'])
+        self.connection = namedtuple("Layer", ["layer1", "layer2"])
         self.layers = []
         self.params = []
         self.get_layers()
@@ -15,24 +15,29 @@ class Graph:
                 else:
                     result.append(i)
             return result
+
         return _flatten(x, [])
 
     def _validate_init(self, **kwargs):
         if (
-            kwargs.get('inputs', False)
-            and isinstance(kwargs.get('inputs', False), (list, tuple)) != 1
+            kwargs.get("inputs", False)
+            and isinstance(kwargs.get("inputs", False), (list, tuple)) != 1
         ):
-            raise Exception('Use \'input\' argument instead of \'inputs\' if you want to pass a list or a tuple')
+            raise Exception(
+                "Use 'input' argument instead of 'inputs' if you want to pass a list or a tuple"
+            )
         elif (
-            kwargs.get('input', False)
-            and isinstance(kwargs.get('input', False), (list, tuple)) >= 1
+            kwargs.get("input", False)
+            and isinstance(kwargs.get("input", False), (list, tuple)) >= 1
         ):
-            raise Exception('Use \'inputs\' argument instead of \'input\' if you want to pass an input layer')
+            raise Exception(
+                "Use 'inputs' argument instead of 'input' if you want to pass an input layer"
+            )
 
-        inputs = kwargs.get('inputs', False) or kwargs.get('input', False)
+        inputs = kwargs.get("inputs", False) or kwargs.get("input", False)
 
         if not inputs:
-            raise Exception('inputs should be provided')
+            raise Exception("inputs should be provided")
 
         if isinstance(inputs, (list, tuple)):
             self.inputs = self.flatten(inputs)
@@ -41,21 +46,25 @@ class Graph:
             self.input = inputs
             self.inputs = [inputs]
 
-        outputs = kwargs.get('outputs', False) or kwargs.get('output', False)
+        outputs = kwargs.get("outputs", False) or kwargs.get("output", False)
 
         if not outputs:
-            raise Exception('outputs should be provided')
+            raise Exception("outputs should be provided")
 
         if (
-            kwargs.get('outputs', False)
-            and isinstance(kwargs.get('outputs', False), (list, tuple)) != 1
+            kwargs.get("outputs", False)
+            and isinstance(kwargs.get("outputs", False), (list, tuple)) != 1
         ):
-            raise Exception('Use \'output\' argument instead of \'outputs\' if you want to pass a list or a tuple')
+            raise Exception(
+                "Use 'output' argument instead of 'outputs' if you want to pass a list or a tuple"
+            )
         elif (
-            kwargs.get('output', False)
-            and isinstance(kwargs.get('output', False), (list, tuple)) >= 1
+            kwargs.get("output", False)
+            and isinstance(kwargs.get("output", False), (list, tuple)) >= 1
         ):
-            raise Exception('Use \'outputs\' argument instead of \'output\' if an output layer')
+            raise Exception(
+                "Use 'outputs' argument instead of 'output' if an output layer"
+            )
 
         if isinstance(outputs, (list, tuple)):
             self.outputs = self.flatten(outputs)
@@ -89,7 +98,7 @@ class Graph:
                     visited.add(layer.depth)
 
         self.layers = sorted(self.layers, key=lambda layer: layer.depth)
-        
+
         for layer in self.layers:
             self.params.append(layer.params)
 
@@ -99,15 +108,16 @@ class Graph:
 
         for layer in self.layers:
             self.connected_layers += [self.connection(layer, i) for i in layer.next]
-    
+
     def same_input_len(self, inputs):
         return len(inputs) == len(self.inputs)
 
     def call(self, *args):
-        'This method is responsible for flowing the data through the graph (Functional Model)'
+        "This method is responsible for flowing the data through the graph (Functional Model)"
         if not self.same_input_len(args):
-            raise Exception(f'Not the same input length expected {len(self.inputs)} found {len(args)}')
-        
+            raise Exception(
+                f"Not the same input length expected {len(self.inputs)} found {len(args)}"
+            )
 
         consumed_args = 0
         outs = []
@@ -121,16 +131,17 @@ class Graph:
                 out = layer(prev_outs)
             elif len(prevs) == 1:
                 out = layer(prevs[0].get_output())
-            
+
             if layer in self.outputs:
                 outs.append(out)
         return outs if len(outs) > 1 else outs[0]
 
-
     def call_with_external_weights(self, params, *args):
         if len(args) != len(self.inputs):
-            raise Exception(f'Not the same input length expected {len(self.inputs)} found {len(args)}')
-        
+            raise Exception(
+                f"Not the same input length expected {len(self.inputs)} found {len(args)}"
+            )
+
         consumed_args = 0
         outs = []
         for param, layer in zip(params, self.layers):
@@ -148,7 +159,7 @@ class Graph:
                 outs.append(out)
 
         return outs if len(outs) > 1 else outs[0]
-    
+
     def __call__(self, inputs):
         return self.call(inputs)
 
