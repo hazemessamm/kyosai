@@ -98,7 +98,7 @@ class MaxPooling2D(Pooling):
         name=None,
         **kwargs,
     ):
-        super(MaxPool2D, self).__init__(
+        super(MaxPooling2D, self).__init__(
             pool_size=pool_size,
             strides=strides,
             padding=padding,

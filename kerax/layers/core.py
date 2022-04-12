@@ -1,6 +1,6 @@
 import operator as op
 from functools import reduce
-from typing import Any, Callable, Tuple, Union, List
+from typing import Any, Callable, List, Tuple, Union
 
 from jax import lax
 from jax import numpy as jnp
@@ -13,7 +13,7 @@ from kerax.engine.containers import NodeContainer, Weight
 from kerax.initializers import Initializer, initializers
 from numpy import ndarray
 
-import layer_utils
+from . import layer_utils
 
 
 class InputSpec:
@@ -44,15 +44,14 @@ class Layer(Trackable):
     ):
         super(Layer, self).__init__(self.__class__.__name__ if name is None else name)
 
-        layer_utils._check_seed(seed)
-        layer_utils.check_jit(self)
+        layer_utils._check_jit(self)
 
         # Stores the layer params
         self._params = []
         # Stores the previous layer
         self._node_container = NodeContainer()
         self.built = False
-        self.seed = PRNGKey(seed)
+        self.seed = PRNGKey(layer_utils._check_seed(seed))
         self.trainable = trainable
         self.dtype = dtype or backend.precision()
         self._has_nested_layers = False

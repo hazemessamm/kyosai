@@ -2,7 +2,6 @@ from .convolutional import Conv2D
 from .attention import MultiHeadAttention
 from .core import (
     Activation,
-    BatchNormalization,
     Dense,
     Dropout,
     Flatten,
