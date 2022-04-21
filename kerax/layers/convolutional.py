@@ -1,3 +1,4 @@
+from distutils.log import warn
 from typing import Callable, Tuple, Union
 
 from jax import lax
@@ -39,9 +40,6 @@ class Conv2D(Layer):
         bias_initializer: Union[str, Callable] = "normal",
         use_bias: bool = True,
         seed: int = None,
-        input_dim_order: str = "NHWC",
-        kernel_dim_order: str = "HWIO",
-        output_dim_order: str = "NHWC",
         trainable: bool = True,
         dtype="float32",
         name: str = None,
@@ -59,7 +57,8 @@ class Conv2D(Layer):
         self.bias_initializer = self.get_initializer(bias_initializer)
         self.built = False
         self.use_bias = use_bias
-        self.dimension_numbers = (input_dim_order, kernel_dim_order, output_dim_order)
+        # (input_dim_order, kernel_dim_order, output_dim_order)
+        self.dimension_numbers = ("NHWC", "HWIO", "NHWC")
         self._validate_init()
         shape = kwargs.get("shape", False) or kwargs.pop("input_shape", False)
         if shape:
@@ -115,10 +114,14 @@ class Conv2D(Layer):
         elif isinstance(self.kernel_size, tuple) and len(self.kernel_size) == 1:
             self.kernel_size *= 2
 
+        if self.padding == "causal":
+            raise ValueError(
+                f"`causal` padding is only allowed in `Conv1D` layer. Recieved padding={self.padding}"
+            )
+
     def build(self, input_shape: Tuple):
         "Initializes the Kernel and stores the Conv2D weights"
-        if len(input_shape) == 3:
-            input_shape = (None, *input_shape)
+        input_shape = (None, *input_shape[-3:])
 
         k1, k2 = random.split(self.seed)
         kernel_shape = self.compute_kernel_shape(input_shape)
@@ -155,7 +158,8 @@ class Conv2D(Layer):
             padding=self.padding,
             dimension_numbers=self.dn,
         )
-        output = jnp.add(output, params[1]) if self.use_bias else output
+        if self.use_bias:
+            output = jnp.add(output, params[1])
         return lax.cond(
             self.activation != None, lambda: self.activation(output), lambda: output
         )

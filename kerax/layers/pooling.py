@@ -105,7 +105,6 @@ class MaxPooling2D(Pooling):
             seed=seed,
             dtype=dtype,
             name=name,
-            expand_dims=True,
             **kwargs,
         )
 
@@ -145,18 +144,15 @@ class AveragePooling2D(Pooling):
             **kwargs,
         )
 
-    def rescale(self, outputs, inputs):
-        one = jnp.ones((1, inputs.shape[1], inputs.shape[2], 1), dtype=inputs.dtype)
-        window_sizes = lax.reduce_window(
-            one, 0.0, lax.add, self.pool_size, self.strides, self.padding
-        )
-        return outputs / window_sizes
-
     def avgpool_op(self, params: Tuple, inputs: DeviceArray):
         out = lax.reduce_window(
             inputs, 0.0, lax.add, self.pool_size, self.strides, self.padding
         )
-        return self.rescale(out, inputs)
+        ones = jnp.ones((1, inputs.shape[1], inputs.shape[2], 1), dtype=inputs.dtype)
+        window_sizes = lax.reduce_window(
+            ones, 0.0, lax.add, self.pool_size, self.strides, self.padding
+        )
+        return lax.div(out, window_sizes)
 
     def call(self, inputs):
         return self.avgpool_op(self.params, inputs)

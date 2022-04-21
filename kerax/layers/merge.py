@@ -9,7 +9,6 @@ from .core import Layer
 class Merge(Layer):
     def __init__(self, seed: int = None, name: str = None, **kwargs):
         super(Merge, self).__init__(seed=seed, name=name, **kwargs)
-        self.supports_different_shapes = True
         self.supports_specific_axis = False
         self.supported_axis = None
 
@@ -18,19 +17,18 @@ class Merge(Layer):
         return self._output_shape
 
     def compute_output_shape(self, input_shape):
-        return super().compute_output_shape()
+        return super().compute_output_shape(input_shape)
 
     @property
     def input_shape(self):
         return self._input_shape
 
     def _check_shapes(self, input_shapes):
-        if not self.supports_different_shapes:
-            shapes = set(input_shapes)
-            if len(shapes) != 1:
-                raise ValueError(
-                    f"`input_shape` contains unmatched shapes. Recieved: shapes={shapes}"
-                )
+        shapes = set(input_shapes)
+        if len(shapes) != 1:
+            raise ValueError(
+                f"`input_shape` contains unmatched shapes. Recieved: shapes={shapes}"
+            )
 
     def _check_axis(self, input_shapes):
         if self.supports_specific_axis:
@@ -44,10 +42,6 @@ class Merge(Layer):
                 )
 
     def build(self, input_shape: Tuple):
-        if self.supports_different_shapes and self.supports_specific_axis:
-            raise ValueError(
-                "Cannot set both `supports_different_shapes` and `supports_specific_axis` to True"
-            )
         if not isinstance(input_shape, (list, tuple)):
             raise ValueError(
                 f"`input_shape` should be a list of input shapes. Recieved: input_shape={input_shape}"
@@ -60,8 +54,8 @@ class Merge(Layer):
             self._check_shapes(input_shape)
             self._check_axis(input_shape)
 
-        self._input_shape = input_shape
-        self._output_shape = self.compute_output_shape()
+        self._input_shape = input_shape[0]
+        self._output_shape = self.compute_output_shape(input_shape)
         self.built = True
 
 
@@ -102,13 +96,11 @@ class Concatenate(Merge):
 class Add(Merge):
     def __init__(self, name: str = None, **kwargs):
         super(Add, self).__init__(seed=0, name=name, **kwargs)
-        self.supports_different_shapes = False
 
     @property
     def shape(self):
         return self._output_shape
 
-    @property
     def compute_output_shape(self, input_shape):
         return input_shape[0]
 

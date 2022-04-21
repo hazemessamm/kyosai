@@ -10,6 +10,28 @@ from kerax.engine import Trackable
 from kerax.engine import data_adapter
 from kerax.engine.graph import GraphV2
 from kerax.layers.core import Layer
+from typing import Any
+
+
+def is_functional_params(*args, **kwargs):
+    is_functional = False
+    for arg in args:
+        if isinstance(arg, Layer):
+            is_functional = True
+
+    for val in kwargs.values():
+        if isinstance(val, Layer):
+            is_functional = True
+
+    return is_functional
+
+
+class Model(Trackable):
+    def __new__(cls, *args, **kwargs):
+        if cls == Model and is_functional_params(*args, **kwargs):
+            return GraphV2(*args, **kwargs)
+        else:
+            super(Model, cls).__new__(cls, *args, **kwargs)
 
 
 class Model(Trackable):
@@ -33,7 +55,22 @@ class Model(Trackable):
         self._training_phase = False
         self._compiled = False
         self._sequential_model = isinstance(self, Sequential)
-        self.initialize_graph(*args, **kwargs)
+        self.metrics_instances = {}
+
+        if len(type(self).__mro__) == 3:
+            self.initialize_graph(*args, **kwargs)
+
+    def __getattribute__(self, __name: str):
+        if __name == "compile":
+            self._compiled = True
+            self._metrics_values = {}
+        return super().__getattribute__(__name)
+
+    def __setattr__(self, __name: str, __value: Any) -> None:
+        if isinstance(__value, losses.Loss):
+            __value.prediction_fn = self.call_with_external_weights
+
+        return super().__setattr__(__name, __value)
 
     @property
     def __name__(self):
@@ -43,7 +80,7 @@ class Model(Trackable):
     def layers(self):
         if self._sequential_model:
             return self._layers
-        return list(self.graph.layers.values())
+        return self.graph.layers.values()
 
     @property
     def params(self):
@@ -67,7 +104,6 @@ class Model(Trackable):
             self.graph = GraphV2(*args, **kwargs)
 
     def _get_metrics(self, metrics):
-        self.metrics_instances = {}
         if metrics is not None:
             if not isinstance(metrics, list):
                 raise ValueError(
@@ -84,22 +120,17 @@ class Model(Trackable):
 
     def compile(self, loss, optimizer, metrics=None):
         "Takes the loss, optimizer and loss recorder state"
-        if isinstance(loss, str):
-            self.loss_fn = losses.get(loss)()
-        else:
-            self.loss_fn = loss
+        self.loss_fn = losses.get(loss)
+        self.optimizer = optimizers.get(optimizer)
 
-        if isinstance(optimizer, str):
-            self.optimizer = optimizers.get(optimizer)()
-        else:
-            self.optimizer = optimizer
+        if isinstance(self.loss_fn, type):
+            self.loss_fn = self.loss_fn()
 
-        self.loss_fn.setup_loss(self)
+        if isinstance(self.optimizer, type):
+            self.optimizer = self.optimizer()
+
         self.optimizer.initialize(self.params)
         self._get_metrics(metrics)
-        self._loss_grad = jax.jit(jax.value_and_grad(self.loss_fn, 0, has_aux=True))
-        self._metrics_values = {}
-        self._compiled = True
 
     def __call__(self, x, training=False):
         "Takes inputs and returns predictions"
@@ -125,14 +156,13 @@ class Model(Trackable):
             layer.update_weights(w)
         self.graph.params = updated_weights
 
-    def apply_gradients(self, gradients):
-        new_params = self.optimizer.minimize(self.params, gradients)
-        self.update_weights(new_params)
-
     def train_step(self, x, y):
         "Returns loss value and takes training batch"
-        (loss, predictions), gradients = self._loss_grad(self.params, x, y)
-        self.apply_gradients(gradients=gradients)
+        (loss, predictions), gradients = self.loss_fn(
+            self.params, x, y, return_gradients=True
+        )
+        params = self.optimizer.minimize(self.params, gradients)
+        self.update_weights(params)
         self._metrics_values.update({"loss": loss})
         return predictions
 
@@ -140,7 +170,7 @@ class Model(Trackable):
         avg_valid_loss = 0
         for _ in range(validation_dataset.num_batches):
             batch_x, batch_y = validation_dataset.get_batch()
-            avg_valid_loss += self.loss_fn(self.graph.params, batch_x, batch_y)
+            avg_valid_loss += self.loss_fn(batch_x, batch_y, return_gradients=False)
         self._metrics_values.update({"Validation loss": avg_valid_loss})
 
     def _test_step(self, validation_dataset):

@@ -33,11 +33,11 @@ class Weight:
             if (self.weights.shape == weights.shape) and (self.dtype == weights.dtype):
                 self.weights = weights
             else:
-                raise Exception(
+                raise ValueError(
                     f"New weights shape does not match the current weights shape, {self.weights.shape} != {weights.shape}"
                 )
         else:
-            raise Exception(
+            raise ValueError(
                 f"Weights are not initialized yet. Use get_weights() method to initialize the weights"
             )
 

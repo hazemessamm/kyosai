@@ -14,7 +14,7 @@ class Trackable:
         uid = Trackable.__name_uids.get(name, None)
         if uid is not None:
             if uid == 1:
-                del(Trackable.__name_uids)
+                del Trackable.__name_uids
             else:
                 Trackable.__name_uids[name] -= 1
 

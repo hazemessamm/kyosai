@@ -1,7 +1,4 @@
-from .models import (
-    Model, 
-    Sequential
-)
+from .models import Model, Sequential
 
 from . import utils
 from . import metrics

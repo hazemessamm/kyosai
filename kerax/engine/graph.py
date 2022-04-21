@@ -163,7 +163,7 @@ class GraphV2:
                 parameters.append(layer.params)
         return dependencies, layers, parameters, layer_functions
 
-    def update_params(self, new_params):
+    def update_weights(self, new_params):
         for param, layer_name in zip(new_params, self.dependencies.keys()):
             self.layers[layer_name].update_weights(param)
 

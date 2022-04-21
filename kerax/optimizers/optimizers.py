@@ -1,6 +1,7 @@
 from jax import jit  # type: ignore
 from jax import grad, value_and_grad  # type: ignore
-from jax.example_libraries import optimizers  # type: ignore
+from jax.example_libraries import optimizers
+from pyparsing import Opt  # type: ignore
 from kerax import backend
 import optax
 
@@ -158,12 +159,14 @@ supported_optimizers = {
 
 
 def get(identifier):
+    optimizer = None
     if identifier is None:
         return None
-    elif isinstance(identifier, Optimizer) or callable(identifier):
-        return identifier
-    else:
+    elif isinstance(identifier, str):
         optimizer = supported_optimizers.get(identifier, None)
-        if optimizer is None:
-            raise Exception("Cannot find the specified optimizer")
-        return optimizer
+    elif isinstance(identifier, Optimizer) and callable(identifier):
+        return identifier
+
+    if optimizer is None:
+        raise Exception("Cannot find the specified optimizer")
+    return optimizer

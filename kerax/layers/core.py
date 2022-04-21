@@ -12,6 +12,7 @@ from kerax.engine import Trackable
 from kerax.engine.containers import NodeContainer, Weight
 from kerax.initializers import Initializer, initializers
 from numpy import ndarray
+import abc
 
 from . import layer_utils
 
@@ -56,7 +57,6 @@ class Layer(Trackable):
         self.dtype = dtype or backend.precision()
         self._has_nested_layers = False
         self._is_nested = False
-        self._requires_unpacking_on_call = False
 
     def __setattr__(self, __name: str, __value: Any) -> None:
         if isinstance(__value, Layer):
@@ -68,6 +68,12 @@ class Layer(Trackable):
 
             __value._is_nested = True
         return super().__setattr__(__name, __value)
+
+    def __getattribute__(self, __name: str) -> Any:
+        __value = super().__getattribute__(__name)
+        if __name == "build":
+            self.built = True
+        return __value
 
     @property
     def shape(self):
@@ -142,43 +148,48 @@ class Layer(Trackable):
             for w_old, w_new in zip(self._params, new_weights):
                 w_old.update_weights(w_new)
 
+    def check_shape_if_built(self, layers):
+        if isinstance(layers, (list, tuple)):
+            for l in layers:
+                if self.input_shape != l.shape:
+                    raise ValueError(
+                        f"This input shape of layer {self.name} does not match the output shape of layer {l.name}. Expected: {self.input_shape}. Recieved: {l.shape}"
+                    )
+        else:
+            if self.input_shape != layers.shape:
+                raise ValueError(
+                    f"This input shape of layer {self.name} does not match the output shape of layer {layers.name}. Expected: {self.input_shape}. Recieved: {layers.shape}"
+                )
+
     def __call__(self, inputs, *args, **kwargs):
-        if isinstance(inputs, (list, tuple)):
-            if self.built:
+        if not self.built:
+            if isinstance(inputs, Layer):
+                self.build(inputs.shape)
+                self.connect(inputs)
+                return self
+            elif isinstance(inputs, (ndarray, DeviceArray)):
+                self.build(inputs.shape)
+                return self.call(inputs, *args, **kwargs)
+            elif isinstance(inputs, (list, tuple)):
+                self.build([_input.shape for _input in inputs])
+                if all([isinstance(i, Layer) for i in inputs]):
+                    self.connect(inputs)
+                    return self
+                else:
+                    return self.call(inputs, *args, **kwargs)
+            else:
+                raise ValueError(
+                    f"`inputs` should be with type `Layer`, `ndarray`, `DeviceArray`, `list` or `tuple`. Recieved: {type(inputs)}"
+                )
+        else:
+            if isinstance(inputs, Layer):
+                self.check_shape_if_built(inputs)
+                self.connect(inputs)
+                return self
+            else:
                 return self.call(inputs, *args, **kwargs)
 
-            # If the inputs are a list of layers
-            if all([isinstance(_input, Layer) for _input in inputs]):
-                self.build([_input.shape for _input in inputs])
-                self.connect(inputs)
-                return self
-            # If the inputs are list of tensors
-            elif all([isinstance(_input, (ndarray, DeviceArray)) for _input in inputs]):
-                self.build([_input.shape for _input in inputs])
-                return self.call(inputs, *args, **kwargs)
-            else:
-                raise ValueError(
-                    f"Unsupported inputs type. Recieved inputs with type {type(inputs)}"
-                )
-        elif isinstance(inputs, Layer):
-            if self.built:
-                raise ValueError(
-                    f"Error in layer {self.name}, this layer is already built, you cannot pass any more layers to it"
-                )
-            else:
-                self.build(inputs.shape)
-                self.connect(inputs)
-                return self
-        elif isinstance(inputs, (DeviceArray, ndarray)):
-            if self.built:
-                return self.call(inputs, *args, **kwargs)
-            else:
-                self.build(inputs.shape)
-                return self.call(inputs, *args, **kwargs)
-        else:
-            raise ValueError(
-                f"Error in layer {self.name}, {type(inputs)} is not supported, supported: (list, tuple, Layer, DeviceArray, ndarray)"
-            )
+    abc.abstractmethod
 
     def call(self, inputs: DeviceArray):
         raise NotImplementedError(
@@ -268,10 +279,6 @@ class Dense(Layer):
         self.kernel_initializer = self.get_initializer(kernel_initializer)
         self.bias_initializer = self.get_initializer(bias_initializer)
         self.use_bias = use_bias
-
-        input_shape = kwargs.pop("input_shape", False)
-        if input_shape:
-            self.build(input_shape=input_shape)
 
     @property
     def shape(self):
@@ -436,3 +443,26 @@ class Activation(Layer):
 
     def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         return self.activation_op(params, inputs)
+
+
+class Reshape(Layer):
+    def __init__(self, target_shape, name=None):
+        super(Reshape, self).__init__(name=name)
+        self.target_shape = target_shape
+
+    @property
+    def shape(self):
+        return (None, *self.target_shape)
+
+    def build(self, input_shape: Tuple):
+        self._input_shape = input_shape
+        self.built = True
+
+    def reshape_op(self, params, inputs):
+        return lax.reshape(inputs, (inputs.shape[0], *self.target_shape))
+
+    def call(self, inputs):
+        return self.reshape_op(self.params, inputs)
+
+    def call_with_external_weights(self, params, inputs):
+        return self.reshape_op(params, inputs)
