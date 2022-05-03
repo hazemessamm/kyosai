@@ -1,15 +1,3 @@
-from .initializers import (
-    Initializer,
-    Zeros,
-    Ones,
-    Normal,
-    GlorotNormal,
-    HeNormal,
-    GlorotUniform,
-    HeUniform,
-    KaimingNormal,
-    KaimingUniform,
-    LecunNormal,
-    LecunUniform,
-    get,
-)
+from .initializers import (GlorotNormal, GlorotUniform, HeNormal, HeUniform,
+                           Initializer, KaimingNormal, KaimingUniform,
+                           LecunNormal, LecunUniform, Normal, Ones, Zeros, get)

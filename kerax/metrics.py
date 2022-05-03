@@ -1,5 +1,6 @@
 from jax import numpy as jnp
-from kerax import utils, backend
+
+from kerax import backend, utils
 
 
 class Metric:

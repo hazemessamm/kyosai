@@ -2,7 +2,6 @@ from typing import Tuple
 
 from jax.example_libraries import stax
 from jax.numpy import DeviceArray
-
 from kerax.layers.core import Layer
 
 

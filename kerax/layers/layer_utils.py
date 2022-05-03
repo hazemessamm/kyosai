@@ -1,6 +1,6 @@
-from kerax import backend
-from jax import jit
 import numpy as np
+from jax import jit
+from kerax import backend
 
 
 def _check_seed(seed):

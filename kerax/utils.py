@@ -1,5 +1,5 @@
-from jax import numpy as jnp  # type: ignore
 import jax
+from jax import numpy as jnp  # type: ignore
 
 
 def to_categorical(inputs, num_classes, axis=-1):

@@ -1,4 +1,5 @@
 from collections import OrderedDict, namedtuple
+
 import jax.numpy as jnp
 from kerax.engine import generic_utils
 

@@ -3,7 +3,6 @@ from typing import Tuple, Union
 from jax import lax
 from jax import numpy as jnp
 from jax.numpy import DeviceArray
-
 from kerax.layers.core import Layer
 
 

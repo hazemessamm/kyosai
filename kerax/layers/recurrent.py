@@ -1,5 +1,4 @@
 from jax import numpy as jnp  # type: ignore
-
 from kerax.layers.core import Layer
 
 

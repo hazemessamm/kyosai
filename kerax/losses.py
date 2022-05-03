@@ -1,8 +1,10 @@
 from typing import NamedTuple, Union
 
 import optax  # type:ignore
-from jax import jit, value_and_grad
+from jax import jit
 from jax import numpy as jnp
+from jax import value_and_grad
+
 from kerax import backend
 
 

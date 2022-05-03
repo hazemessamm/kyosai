@@ -3,7 +3,6 @@ from collections import OrderedDict
 
 import jax
 from jax import numpy as jnp
-
 from kerax.engine import generic_utils
 from kerax.engine.model import _Model
 

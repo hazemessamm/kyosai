@@ -1,8 +1,8 @@
-from kerax import losses, optimizers
 from typing import Any
+
+from kerax import backend, losses, optimizers
 from kerax.engine import data_adapter
 from tqdm import trange
-from kerax import backend
 
 
 class _Model:
@@ -129,7 +129,6 @@ class _Model:
         steps=None,
         shuffle=True,
         validation_data=None,
-        record_loss_per=None,
     ):
         if not self.compiled:
             raise Exception("Model is not compiled, use compile() method")
@@ -162,5 +161,6 @@ class _Model:
                         self._metrics_values.update(
                             {metric_name: metric_instance(batch_y, predictions)}
                         )
+
 
                     prog_bar.set_postfix(**self._metrics_values)

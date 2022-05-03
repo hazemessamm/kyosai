@@ -1,2 +1,7 @@
+__pycache__/
+.ipynb_checkpoints/
 testing.ipynb
 mnist_dataset.csv
+kerax.egg-info/
+build/
+dist/

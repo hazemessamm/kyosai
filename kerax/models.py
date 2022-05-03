@@ -1,8 +1,10 @@
-from jax.numpy import ndarray, DeviceArray
+from typing import Any, List, Tuple, Union
+
+from jax.numpy import DeviceArray, ndarray
+
+from kerax.engine import model
 from kerax.engine.graph import GraphV2
 from kerax.layers.core import Layer
-from typing import Any, List, Tuple, Union
-from kerax.engine import model
 
 
 def is_functional_params(*args, **kwargs):

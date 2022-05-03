@@ -1,11 +1,9 @@
-from distutils.log import warn
 from typing import Callable, Tuple, Union
 
 from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax.numpy import DeviceArray
-
 from kerax.layers.core import Layer
 
 

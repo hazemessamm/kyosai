@@ -1,4 +1,2 @@
-from .models import Model, Sequential
-
-from . import utils
-from . import metrics
+from kerax import metrics, utils
+from kerax.models import Model, Sequential

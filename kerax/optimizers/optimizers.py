@@ -1,8 +1,5 @@
-from jax import jit  # type: ignore
-from jax import grad, value_and_grad  # type: ignore
-from pyparsing import Opt  # type: ignore
-from kerax import backend
 import optax
+from jax import jit  # type: ignore
 
 
 class Optimizer:
