@@ -1,11 +1,10 @@
 from jax import numpy as jnp
-from kerax.engine import Trackable
-from . import utils
+from kerax import utils, backend
 
 
-class Metric(Trackable):
+class Metric:
     def __init__(self, name=None):
-        self.name = name
+        self.name = backend.memoize(self.__class__.__name__ if name is None else name)
 
     def __call__(self, x, y):
         raise NotImplementedError("Should be implemented in a subclass")

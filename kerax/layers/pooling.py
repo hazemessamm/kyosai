@@ -4,7 +4,7 @@ from jax import lax
 from jax import numpy as jnp
 from jax.numpy import DeviceArray
 
-from .core import Layer
+from kerax.layers.core import Layer
 
 
 class Pooling(Layer):

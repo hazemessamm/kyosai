@@ -1,3 +1,4 @@
+import inspect
 import operator as op
 from functools import reduce
 from typing import Any, Callable, List, Tuple, Union
@@ -8,15 +9,13 @@ from jax import random
 from jax.numpy import DeviceArray
 from jax.random import PRNGKey
 from kerax import activations, backend
-from kerax.engine import Trackable
 from kerax.engine.containers import NodeContainer, Weight
 from kerax.initializers import Initializer, initializers
+from kerax.layers import layer_utils
 from numpy import ndarray
-import abc
-
-from . import layer_utils
 
 
+# Not used or ready yet
 class InputSpec:
     def __init__(self):
         self.input_shape = None
@@ -34,7 +33,7 @@ class InputSpec:
         self._internal_input_shape = (None, *input_shape)
 
 
-class Layer(Trackable):
+class Layer:
     def __init__(
         self,
         seed: int = None,
@@ -43,20 +42,23 @@ class Layer(Trackable):
         name: str = None,
         **kwargs,
     ):
-        super(Layer, self).__init__(self.__class__.__name__ if name is None else name)
-
+        self.name = backend.memoize(self.__class__.__name__ if name is None else name)
         layer_utils._check_jit(self)
 
         # Stores the layer params
         self._params = []
+
         # Stores the previous layer
         self._node_container = NodeContainer()
-        self.built = False
         self.seed = PRNGKey(layer_utils._check_seed(seed))
         self.trainable = trainable
         self.dtype = dtype or backend.precision()
+        self.built = False
         self._has_nested_layers = False
         self._is_nested = False
+        self._validated = False
+        self._required_num_inputs = None
+        self._validate_layer_options()
 
     def __setattr__(self, __name: str, __value: Any) -> None:
         if isinstance(__value, Layer):
@@ -65,15 +67,21 @@ class Layer(Trackable):
                 self._nested_layers = [__value]
             else:
                 self._nested_layers.append(__value)
-
             __value._is_nested = True
         return super().__setattr__(__name, __value)
 
-    def __getattribute__(self, __name: str) -> Any:
-        __value = super().__getattribute__(__name)
-        if __name == "build":
-            self.built = True
-        return __value
+    def _validate_layer_options(self):
+        call_params = inspect.signature(self.call).parameters
+        self._required_number_inputs = len(call_params)
+
+        call_with_external_weights_params = inspect.signature(
+            self.call_with_external_weights
+        ).parameters
+        if "params" not in call_with_external_weights_params:
+            raise ValueError(
+                f"`params` argument should be added as the first argument in `call_with_external_weights` function. Recieved: {call_with_external_weights_params.keys()}"
+            )
+        self._validated = True
 
     @property
     def shape(self):
@@ -140,13 +148,24 @@ class Layer(Trackable):
         return self._params
 
     def set_weights(self, new_weights: Tuple):
-        for w1, w2 in zip(self._params, new_weights):
-            w1.set_weights(w2)
+        if len(new_weights) > 0:
+            if self._has_nested_layers:
+                for layer in self._nested_layers:
+                    for w1, w2 in zip(layer._params, new_weights):
+                        w1.set_weights(w2)
+            else:
+                for w1, w2 in zip(self._params, new_weights):
+                    w1.set_weights(w2)
 
     def update_weights(self, new_weights: Tuple):
         if len(new_weights) > 0:
             for w_old, w_new in zip(self._params, new_weights):
                 w_old.update_weights(w_new)
+
+            if self._has_nested_layers:
+                for layer, new_weight in zip(self._nested_layers, new_weights):
+                    for w_old, w_new in zip(layer._params, new_weight):
+                        w_old.update_weights(w_new)
 
     def check_shape_if_built(self, layers):
         if isinstance(layers, (list, tuple)):
@@ -161,7 +180,20 @@ class Layer(Trackable):
                     f"This input shape of layer {self.name} does not match the output shape of layer {layers.name}. Expected: {self.input_shape}. Recieved: {layers.shape}"
                 )
 
-    def __call__(self, inputs, *args, **kwargs):
+    def __call__(self, *inputs, **kwargs):
+        if not self._required_num_inputs:
+            if len(inputs) > 1:
+                inputs = inputs[0]
+                args = inputs[1:]
+            else:
+                inputs = inputs[0]
+                args = ()
+            has_multiple_inputs = False
+        else:
+            inputs = inputs[: self._required_num_inputs]
+            args = inputs[self._required_num_inputs :]
+            has_multiple_inputs = True
+
         if not self.built:
             if isinstance(inputs, Layer):
                 self.build(inputs.shape)
@@ -169,14 +201,20 @@ class Layer(Trackable):
                 return self
             elif isinstance(inputs, (ndarray, DeviceArray)):
                 self.build(inputs.shape)
-                return self.call(inputs, *args, **kwargs)
+                if has_multiple_inputs:
+                    return self.call(*inputs, *args, **kwargs)
+                else:
+                    return self.call(inputs, *args, **kwargs)
             elif isinstance(inputs, (list, tuple)):
                 self.build([_input.shape for _input in inputs])
                 if all([isinstance(i, Layer) for i in inputs]):
                     self.connect(inputs)
                     return self
                 else:
-                    return self.call(inputs, *args, **kwargs)
+                    if has_multiple_inputs:
+                        return self.call(*inputs, *args, **kwargs)
+                    else:
+                        return self.call(inputs, *args, **kwargs)
             else:
                 raise ValueError(
                     f"`inputs` should be with type `Layer`, `ndarray`, `DeviceArray`, `list` or `tuple`. Recieved: {type(inputs)}"
@@ -187,11 +225,17 @@ class Layer(Trackable):
                 self.connect(inputs)
                 return self
             else:
-                return self.call(inputs, *args, **kwargs)
-
-    abc.abstractmethod
+                if has_multiple_inputs:
+                    return self.call(*inputs, *args, **kwargs)
+                else:
+                    return self.call(inputs, *args, **kwargs)
 
     def call(self, inputs: DeviceArray):
+        raise NotImplementedError(
+            "This method should be implemented in Layer subclasses"
+        )
+
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         raise NotImplementedError(
             "This method should be implemented in Layer subclasses"
         )
@@ -208,7 +252,7 @@ class Layer(Trackable):
 
 class Input(Layer):
     """
-    Input Layer that stores the training data and returns batches from it 
+    Input Layer that stores the input shape
     params:
     shape: takes a tuple (0, H, W, C)
     """
@@ -466,3 +510,27 @@ class Reshape(Layer):
 
     def call_with_external_weights(self, params, inputs):
         return self.reshape_op(params, inputs)
+
+
+class Squeeze(Layer):
+    def __init__(self, axis, name=None):
+        super(Squeeze, self).__init__(name=name)
+        self.axis = axis
+
+    @property
+    def shape(self):
+        return self._shape
+
+    def build(self, input_shape: Tuple):
+        self._input_shape = input_shape
+        self._shape = (*input_shape[: self.axis], *input_shape[self.axis + 1 :])
+        self.built = True
+
+    def squeeze_op(self, params, inputs):
+        return jnp.squeeze(inputs, self.axis)
+
+    def call(self, inputs):
+        return self.squeeze_op(self.params, inputs)
+
+    def call_with_external_weights(self, params, inputs):
+        return self.squeeze_op(params, inputs)

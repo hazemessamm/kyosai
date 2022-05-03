@@ -1,7 +1,7 @@
 from jax import nn
 from jax import numpy as jnp
 
-from .core import Dense, Layer
+from kerax.layers.core import Dense, Layer
 
 
 class Attention(Layer):
@@ -26,7 +26,7 @@ class Attention(Layer):
         return self.attention_op(query, key, value, mask)
 
 
-class MultiHeadAttention(Attention):
+class MultiHeadAttention(Layer):
     def __init__(
         self,
         embedding_dim,
@@ -48,6 +48,7 @@ class MultiHeadAttention(Attention):
         self.num_heads = num_heads
         self.use_bias = use_bias
         self.activation = activation
+        self._required_num_inputs = 3
 
         self.q = Dense(
             embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable
@@ -66,17 +67,31 @@ class MultiHeadAttention(Attention):
     def compute_mask(self, x):
         pass
 
+    def attention_op(self, query, key, value, mask=None):
+        d_model = query.shape[-1]
+        scores = jnp.divide(
+            jnp.matmul(query, key.transpose(0, 2, 1)), jnp.sqrt(d_model)
+        )
+        if mask is not None:
+            scores = jnp.matmul(scores, mask)
+        attention = nn.softmax(scores, axis=-1)
+        attention = jnp.matmul(attention, value)
+        return attention
+
     def build(self, input_shape):
         query_dim, key_dim, value_dim = input_shape
         self.q.build(query_dim)
         self.k.build(key_dim)
         self.v.build(value_dim)
-        self.o.build(query_dim)
+
+        self.o.build(self.q.shape)
         self._input_shape = query_dim
+        self.built = True
+        self._shape = self.o.shape
 
     @property
     def shape(self):
-        return self._input_shape
+        return self._shape
 
     def _transpose_qkv(self, inputs):
         inputs = inputs.reshape(inputs.shape[0], inputs.shape[1], self.num_heads, -1)
@@ -89,7 +104,6 @@ class MultiHeadAttention(Attention):
         return inputs.reshape(inputs.shape[0], inputs.shape[1], -1)
 
     def call(self, query, key, value, mask=None):
-
         queries = self._transpose_qkv(self.q(query))
         keys = self._transpose_qkv(self.k(key))
         values = self._transpose_qkv(self.v(value))

@@ -1,6 +1,5 @@
 from jax import jit  # type: ignore
 from jax import grad, value_and_grad  # type: ignore
-from jax.example_libraries import optimizers
 from pyparsing import Opt  # type: ignore
 from kerax import backend
 import optax
@@ -64,6 +63,8 @@ class SGD(Optimizer):
             learning_rate=learning_rate, momentum=momentum, nesterov=nesterov
         )
 
+        self._optimizer_update_fn = jit(self._optimizer.update)
+
 
 class Adam(Optimizer):
     """
@@ -84,6 +85,7 @@ class Adam(Optimizer):
         self._optimizer = optax.adam(
             learning_rate=learning_rate, b1=beta_1, b2=beta_2, eps=epsilon
         )
+        self._optimizer_update_fn = jit(self._optimizer.update)
 
 
 class Adagrad(Optimizer):
@@ -109,6 +111,7 @@ class Adagrad(Optimizer):
             initial_accumulator_value=initial_accumulator_value,
             eps=eps,
         )
+        self._optimizer_update_fn = jit(self._optimizer.update)
 
 
 class RMSProp(Optimizer):
@@ -148,6 +151,7 @@ class RMSProp(Optimizer):
             momentum=momentum,
             nesterov=nesterov,
         )
+        self._optimizer_update_fn = jit(self._optimizer.update)
 
 
 supported_optimizers = {

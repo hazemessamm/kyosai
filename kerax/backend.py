@@ -1,16 +1,21 @@
 import jax
 
-from kerax.engine import Trackable
-
 _PRECISION = "float32"
 _IS_JIT_ENABLED = True
+_MEMO = {}
+
+
+def memoize(input):
+    global _MEMO
+    _MEMO[input] = _MEMO.get(input, 0) + 1
+    return f"{input}_{_MEMO[input]}"
 
 
 def clear_session():
-    Trackable.reset()
+    _MEMO.clear()
 
 
-def current_platform():
+def platform():
     return jax.lib.xla_bridge.get_backend().platform
 
 
@@ -41,7 +46,7 @@ def enable_jit_execution(enable):
     if isinstance(enable, bool):
         _IS_JIT_ENABLED = enable
     else:
-        raise TypeError(f'"enable_jit" should be boolean found type {type(enable)}')
+        raise TypeError(f"`enable_jit` should be boolean. Recieved: {type(enable)}")
 
 
 def is_jit_enabled():
@@ -53,7 +58,7 @@ def device_put(x, id):
     available_devices = devices()
     if len(available_devices) <= id:
         raise ValueError(
-            f"Number of devices={len(available_devices)}. Recieved index={id}"
+            f"Number of devices={len(available_devices)}. Recieved id={id}"
         )
     else:
         device = available_devices[id]

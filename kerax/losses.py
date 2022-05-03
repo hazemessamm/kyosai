@@ -1,9 +1,9 @@
-from enum import Enum
 from typing import NamedTuple, Union
 
 import optax  # type:ignore
 from jax import jit, value_and_grad
 from jax import numpy as jnp
+from kerax import backend
 
 
 class Reducer:
@@ -31,6 +31,16 @@ class Reducer:
 
 
 class LossOutputs(NamedTuple):
+    """
+        grad() returns the gradients only and value_and_grad() 
+        evaluates the function and returns it's value and also returns it gradients.
+        It will be inefficient to return the loss value then call the same function again to return the gradients,
+        so This NamedTuple is used to return the loss, predictions (to pass them to the metrics if any) and the gradients (by using value_and_grad).
+
+        The other solution is call the network 2 times, the first one to return the predictions and pass them to the metrics and loss function,
+        The second one when calling it to track the ops and return the gradients. This solution is inefficient.
+    """
+
     loss: jnp.DeviceArray
     predictions: jnp.DeviceArray
 
@@ -38,9 +48,9 @@ class LossOutputs(NamedTuple):
 class Loss:
     def __init__(self, reduction="auto", name=None):
         self.reduction = Reducer(reduction)
-        self.name = self.__class__.__name__ if name is None else name
+        self.name = backend.memoize(self.__class__.__name__ if name is None else name)
         self.epsilon = 1e-12
-        self._call_grad = jit(value_and_grad(self._call, 0, has_aux=True))
+        self.loss_grad_fn = jit(value_and_grad(self._call, 0, has_aux=True))
         self.prediction_fn = None
 
     @property
@@ -59,14 +69,14 @@ class Loss:
         if not return_gradients:
             return self._call(params, train_x, y_true)
         else:
-            return self._call_grad(params, train_x, y_true)
+            return self.loss_grad_fn(params, train_x, y_true)
 
     def get_config(self):
         return {"reduction": self.reduction, "name": self.name}
 
 
 class CategoricalCrossEntropyWithLogits(Loss):
-    def __init__(self, reduction=None, name=None):
+    def __init__(self, reduction="auto", name=None):
         super(CategoricalCrossEntropyWithLogits, self).__init__(reduction, name)
 
     def call(self, y_true, y_preds):
@@ -76,32 +86,22 @@ class CategoricalCrossEntropyWithLogits(Loss):
 
 class CategoricalCrossEntropy(Loss):
     def __new__(cls, *args, **kwargs):
-        with_logits = kwargs.pop("with_logits", False)
-        if with_logits:
+        from_logits = kwargs.pop("from_logits", False)
+        if from_logits:
             return CategoricalCrossEntropyWithLogits(*args, **kwargs)
         else:
             return super().__new__(cls, *args, **kwargs)
 
-    def __init__(self, with_logits=False, reduction=None, name=None):
-        self.with_logits = with_logits
-        if with_logits:
-            self.call = self._call_with_logits
-        else:
-            self.call = self._call_with_probabilities
+    def __init__(self, from_logits=False, reduction="auto", name=None):
         super(CategoricalCrossEntropy, self).__init__(reduction, name)
-
-    def _call_with_logits(self, y_true, y_preds):
-        loss = jnp.sum(optax.softmax_cross_entropy(y_preds, y_true)) / y_preds.shape[0]
-        return loss
-
-    def _call_with_probabilities(self, y_true, y_preds):
+    def call(self, y_true, y_preds):
         y_preds = jnp.clip(y_preds, self.epsilon, 1.0 - self.epsilon)
         loss = -self.reduction(y_true * jnp.log(y_preds + 1e-9))
         return loss
 
 
 class MeanSquaredError(Loss):
-    def __init__(self, reduction=None, name=None):
+    def __init__(self, reduction="auto", name=None):
         super(MeanSquaredError, self).__init__(reduction, name)
 
     def call(self, y_true, y_preds):
@@ -110,7 +110,7 @@ class MeanSquaredError(Loss):
 
 
 class MeanAbsoluteError(Loss):
-    def __init__(self, reduction=None, name=None):
+    def __init__(self, reduction="auto", name=None):
         super(MeanAbsoluteError, self).__init__(reduction, name)
 
     def call(self, y_true, y_preds):
@@ -119,7 +119,7 @@ class MeanAbsoluteError(Loss):
 
 
 class Huber(Loss):
-    def __init__(self, reduction, delta=1.0, name=None):
+    def __init__(self, reduction="auto", delta=1.0, name=None):
         super(Huber, self).__init__(reduction, name)
         self.delta = delta
 
@@ -128,9 +128,8 @@ class Huber(Loss):
         loss = self.reduction(loss)
         return loss
 
-
 class BinaryCrossEntropyWithLogits(Loss):
-    def __init__(self, reduction=None, name=None):
+    def __init__(self, reduction="auto", name=None):
         super(BinaryCrossEntropyWithLogits, self).__init__(
             reduction=reduction, name=name
         )
@@ -141,13 +140,13 @@ class BinaryCrossEntropyWithLogits(Loss):
 
 class BinaryCrossEntropy(Loss):
     def __new__(cls, *args, **kwargs):
-        with_logits = kwargs.pop("with_logits", False)
-        if with_logits:
+        from_logits = kwargs.pop("with_logits", False)
+        if from_logits:
             return BinaryCrossEntropyWithLogits(*args, **kwargs)
         else:
             return super().__new__(cls, *args, **kwargs)
 
-    def __init__(self, with_logits=False, reduction=None, name=None):
+    def __init__(self, from_logits=False, reduction="auto", name=None):
         super(BinaryCrossEntropy, self).__init__(reduction, name)
 
     def call(self, y_true, y_preds):
@@ -158,7 +157,7 @@ class BinaryCrossEntropy(Loss):
 
 
 class CosineDistance(Loss):
-    def __init__(self, reduction=None, name=None):
+    def __init__(self, reduction="auto", name=None):
         super(CosineDistance, self).__init__(reduction=reduction, name=name)
 
     def call(self, y_true, y_preds):
@@ -169,9 +168,9 @@ class CosineDistance(Loss):
 
 supported_losses = {
     "binary_crossentropy": BinaryCrossEntropy,
-    "binary_crossentropy_with_logits": BinaryCrossEntropyWithLogits,
+    "binary_crossentropy_from_logits": BinaryCrossEntropyWithLogits,
     "categorical_crossentropy": CategoricalCrossEntropy,
-    "categorical_crossentropy_with_logits": CategoricalCrossEntropyWithLogits,
+    "categorical_crossentropy_from_logits": CategoricalCrossEntropyWithLogits,
     "mse": MeanSquaredError,
     "mean_squared_error": MeanSquaredError,
     "mae": MeanAbsoluteError,

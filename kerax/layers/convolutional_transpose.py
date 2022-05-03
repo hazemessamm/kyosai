@@ -1,4 +1,4 @@
-from .core import Layer
+from kerax.layers.core import Layer
 from typing import Tuple, Callable, Union
 from jax import random
 from jax import lax

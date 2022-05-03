@@ -6,7 +6,7 @@ from jax import numpy as jnp
 from jax import random
 from jax.numpy import DeviceArray
 
-from .core import Layer
+from kerax.layers.core import Layer
 
 
 class Conv2D(Layer):

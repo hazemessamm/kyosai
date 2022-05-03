@@ -3,7 +3,7 @@ from typing import Tuple
 from jax import numpy as jnp
 from jax.numpy import DeviceArray
 
-from .core import Layer
+from kerax.layers.core import Layer
 
 
 class Merge(Layer):
@@ -32,7 +32,7 @@ class Merge(Layer):
 
     def _check_axis(self, input_shapes):
         if self.supports_specific_axis:
-            axis_list = {}
+            axis_list = set()
             for _input_shape in input_shapes:
                 axis_list.add(_input_shape[self.supported_axis])
 
@@ -77,14 +77,14 @@ class Concatenate(Merge):
     def compute_output_shape(self, input_shape):
         return (
             *input_shape[0][:-1],
-            sum([i[self.axis] for i in input_shape]),
+            sum([i[self.supported_axis] for i in input_shape]),
         )
 
     def build(self, input_shape: Tuple):
         super().build(input_shape)
 
     def concatenate_op(self, params: Tuple, inputs: DeviceArray):
-        return jnp.concatenate(inputs, axis=self.axis)
+        return jnp.concatenate(inputs, axis=self.supported_axis)
 
     def call(self, inputs: DeviceArray):
         return self.concatenate_op(self.params, inputs)
