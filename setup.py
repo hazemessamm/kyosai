@@ -8,8 +8,7 @@ setup(
     long_description="Simple Deep Learning library based on JAX and inspired from Keras, the main idea behind it to have the simplicity of Keras while using JAX",
     author="Hazem Essam",
     author_email="hazemessam199@gmail.com",
-    packages=find_packages('kerax'),
-    package_dir={"": 'kerax'},
+    packages=find_packages(exclude=['tests']),
     install_requires=[
         'numpy',
         'jax==0.3.4',

@@ -1,6 +1,6 @@
-from .attention import MultiHeadAttention
-from .convolutional import Conv2D
-from .convolutional_transpose import Conv2DTranspose
-from .core import (Activation, Dense, Dropout, Flatten, Input, Layer, Reshape,        Squeeze)
-from .merge import Add, Concatenate, Merge
-from .pooling import AveragePooling2D, MaxPooling2D, Pooling
+from kerax.layers.attention import MultiHeadAttention
+from kerax.layers.convolutional import Conv2D
+from kerax.layers.convolutional_transpose import Conv2DTranspose
+from kerax.layers.core import (Activation, Dense, Dropout, Flatten, Input, Layer, Reshape,        Squeeze)
+from kerax.layers.merge import Add, Concatenate, Merge
+from kerax.layers.pooling import AveragePooling2D, MaxPooling2D, Pooling
