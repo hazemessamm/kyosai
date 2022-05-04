@@ -1,4 +1,4 @@
-from typing import Any, List, Tuple, Union
+from typing import List, Tuple, Union
 
 from jax.numpy import DeviceArray, ndarray
 
@@ -19,14 +19,19 @@ def is_functional_params(*args, **kwargs):
         if isinstance(arg, (list, tuple)):
             is_functional = all_input_instances(arg) if i == 0 else all_layer_instances(arg)
         else:
-            if isinstance(arg, Layer):
+            if i == 0 and isinstance(arg, Input):
+                is_functional = True
+            elif isinstance(arg, Layer):
                 is_functional = True
 
-    for i, val in enumerate(kwargs.values()):
-        if isinstance(val, (list, tuple)):
-            is_functional = all_input_instances(val) if i == 0 else all_layer_instances(val)
+
+    for i, arg in enumerate(kwargs.values()):
+        if isinstance(arg, (list, tuple)):
+            is_functional = all_input_instances(arg) if i == 0 else all_layer_instances(arg)
         else:
-            if isinstance(val, Layer):
+            if i == 0 and isinstance(arg, Input):
+                is_functional = True
+            elif isinstance(arg, Layer):
                 is_functional = True
     return is_functional
 

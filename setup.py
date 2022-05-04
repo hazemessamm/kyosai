@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
-
+from kerax import __version__
 
 setup(
     name="kerax",
-    version=0.1,
+    version=__version__,
     description="Deep Learning library based on JAX and inspired from Keras",
     long_description="Simple Deep Learning library based on JAX and inspired from Keras, the main idea behind it to have the simplicity of Keras while using JAX",
     author="Hazem Essam",
