@@ -165,9 +165,8 @@ def get(identifier):
         return None
     elif isinstance(identifier, str):
         optimizer = supported_optimizers.get(identifier, None)
-    elif isinstance(identifier, Optimizer) and callable(identifier):
+    elif isinstance(identifier, Optimizer):
         return identifier
-
     if optimizer is None:
         raise Exception("Cannot find the specified optimizer")
     return optimizer

@@ -48,18 +48,17 @@ class MultiHeadAttention(Layer):
         self.num_heads = num_heads
         self.use_bias = use_bias
         self.activation = activation
-        self._required_num_inputs = 3
 
-        self.q = Dense(
+        self.q_dense = Dense(
             embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable
         )
-        self.k = Dense(
+        self.k_dense = Dense(
             embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable
         )
-        self.v = Dense(
+        self.v_dense = Dense(
             embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable
         )
-        self.o = Dense(
+        self.o_dense = Dense(
             embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable
         )
 
@@ -80,11 +79,10 @@ class MultiHeadAttention(Layer):
 
     def build(self, input_shape):
         query_dim, key_dim, value_dim = input_shape
-        self.q.build(query_dim)
-        self.k.build(key_dim)
-        self.v.build(value_dim)
-
-        self.o.build(self.q.shape)
+        self.q_dense.build(query_dim)
+        self.k_dense.build(key_dim)
+        self.v_dense.build(value_dim)
+        self.o_dense.build(self.q.shape)
         self._input_shape = query_dim
         self.built = True
         self._shape = self.o.shape
@@ -104,23 +102,23 @@ class MultiHeadAttention(Layer):
         return inputs.reshape(inputs.shape[0], inputs.shape[1], -1)
 
     def call(self, query, key, value, mask=None):
-        queries = self._transpose_qkv(self.q(query))
-        keys = self._transpose_qkv(self.k(key))
-        values = self._transpose_qkv(self.v(value))
+        queries = self._transpose_qkv(self.q_dense(query))
+        keys = self._transpose_qkv(self.k_dense(key))
+        values = self._transpose_qkv(self.v_dense(value))
         attention = self.attention_op(queries, keys, values, mask)
         attention = self._transpose_output(attention)
-        attention = self.o(attention)
+        attention = self.o_dense(attention)
         return attention
 
     def call_with_external_weights(self, params, query, key, value, mask=None):
         queries = self._transpose_qkv(
-            self.q.call_with_external_weights(params[0], query)
+            self.q_dense.call_with_external_weights(params[0], query)
         )
-        keys = self._transpose_qkv(self.k.call_with_external_weights(params[1], key))
+        keys = self._transpose_qkv(self.k_dense.call_with_external_weights(params[1], key))
         values = self._transpose_qkv(
-            self.v.call_with_external_weights(params[2], value)
+            self.v_dense.call_with_external_weights(params[2], value)
         )
         attention = self.attention_op(queries, keys, values, mask)
         attention = self._transpose_output(attention)
-        attention = self.o.call_with_external_weights(params[3], attention)
+        attention = self.o_dense.call_with_external_weights(params[3], attention)
         return attention

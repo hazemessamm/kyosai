@@ -81,7 +81,6 @@ class Layer:
             raise ValueError(
                 f"`params` argument should be added as the first argument in `call_with_external_weights` function. Recieved: {call_with_external_weights_params.keys()}"
             )
-        self._validated = True
 
     @property
     def shape(self):
@@ -114,7 +113,7 @@ class Layer:
 
     @property
     def named_params(self):
-        return {param.name: param.get_weights for param in self._params}
+        return {param.name: param.get_weights() for param in self._params}
 
     def build(self, input_shape: Tuple):
         return NotImplementedError("Should be implemented in a subclass")
