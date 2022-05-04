@@ -1,5 +1,7 @@
 import optax
-from jax import jit  # type: ignore
+from jax import jit
+
+from kerax import backend  # type: ignore
 
 
 class Optimizer:
@@ -13,11 +15,11 @@ class Optimizer:
         - model: stores the model to update it's weights every step
         - learning_rate: stores the learning rate (step_size), default: 0.0001
     """
-
     def __init__(self, learning_rate=0.0001):
         self.learning_rate = learning_rate
         self.step_index = 0
         self._initialized = False
+        self._apply_updates = jit(optax.apply_updates)
 
     def initialize(self, params):
         self._optimizer_state = self._optimizer.init(params)
@@ -29,11 +31,11 @@ class Optimizer:
             self._optimizer_state = self._optimizer.init(params)
             self._initialized = True
         # returns new optimizer state by calling the update function
-        updates, self._optimizer_state = self._optimizer.update(
+        updates, self._optimizer_state = self._optimizer_update(
             grads, self._optimizer_state
         )
         # Apply new weights on the current weights
-        new_params = optax.apply_updates(params, updates)
+        new_params = self._apply_updates(params, updates)
         return new_params
 
 
@@ -60,7 +62,7 @@ class SGD(Optimizer):
             learning_rate=learning_rate, momentum=momentum, nesterov=nesterov
         )
 
-        self._optimizer_update_fn = jit(self._optimizer.update)
+        self._optimizer_update = jit(self._optimizer.update)
 
 
 class Adam(Optimizer):
@@ -82,7 +84,7 @@ class Adam(Optimizer):
         self._optimizer = optax.adam(
             learning_rate=learning_rate, b1=beta_1, b2=beta_2, eps=epsilon
         )
-        self._optimizer_update_fn = jit(self._optimizer.update)
+        self._optimizer_update = jit(self._optimizer.update)
 
 
 class Adagrad(Optimizer):
@@ -108,7 +110,7 @@ class Adagrad(Optimizer):
             initial_accumulator_value=initial_accumulator_value,
             eps=eps,
         )
-        self._optimizer_update_fn = jit(self._optimizer.update)
+        self._optimizer_update = jit(self._optimizer.update)
 
 
 class RMSProp(Optimizer):
@@ -148,7 +150,7 @@ class RMSProp(Optimizer):
             momentum=momentum,
             nesterov=nesterov,
         )
-        self._optimizer_update_fn = jit(self._optimizer.update)
+        self._optimizer_update = jit(self._optimizer.update)
 
 
 supported_optimizers = {

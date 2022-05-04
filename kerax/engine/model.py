@@ -1,5 +1,7 @@
 from typing import Any
 
+from jax import jit
+
 from kerax import backend, losses, optimizers
 from kerax.engine import data_adapter
 from tqdm import trange
@@ -16,6 +18,10 @@ class _Model:
         self.metrics_instances = {}
         self._params = []
         self.history = {}
+        if backend.is_jit_enabled():
+            self.__call__ = jit(self.__call__)
+            self.call_with_external_weights = jit(self.call_with_external_weights)
+
 
     def _setup_aliases(self):
         self.predict = self.__call__

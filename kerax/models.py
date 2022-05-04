@@ -4,18 +4,30 @@ from jax.numpy import DeviceArray, ndarray
 
 from kerax.engine import model
 from kerax.engine.graph import GraphV2
-from kerax.layers.core import Layer
+from kerax.layers.core import Input, Layer
 
+
+def all_input_instances(arg):
+    return all([isinstance(x, Input) for x in arg])
+
+def all_layer_instances(arg):
+    return all([isinstance(x, Layer) for x in arg])
 
 def is_functional_params(*args, **kwargs):
     is_functional = False
-    for arg in args:
-        if isinstance(arg, Layer):
-            is_functional = True
+    for i, arg in enumerate(args):
+        if isinstance(arg, (list, tuple)):
+            is_functional = all_input_instances(arg) if i == 0 else all_layer_instances(arg)
+        else:
+            if isinstance(arg, Layer):
+                is_functional = True
 
-    for val in kwargs.values():
-        if isinstance(val, Layer):
-            is_functional = True
+    for i, val in enumerate(kwargs.values()):
+        if isinstance(val, (list, tuple)):
+            is_functional = all_input_instances(val) if i == 0 else all_layer_instances(val)
+        else:
+            if isinstance(val, Layer):
+                is_functional = True
     return is_functional
 
 

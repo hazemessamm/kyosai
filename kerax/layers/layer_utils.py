@@ -17,3 +17,4 @@ def _check_seed(seed):
 def _check_jit(layer):
     if backend.is_jit_enabled():
         layer.call = jit(layer.call)
+        layer.call_with_external_weights = jit(layer.call_with_external_weights)

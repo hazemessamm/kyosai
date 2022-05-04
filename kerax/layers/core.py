@@ -13,6 +13,7 @@ from kerax.engine.containers import NodeContainer, Weight
 from kerax.initializers import Initializer, initializers
 from kerax.layers import layer_utils
 from numpy import ndarray
+from jax.interpreters.partial_eval import DynamicJaxprTracer
 
 
 # Not used or ready yet
@@ -58,6 +59,7 @@ class Layer:
         self._is_nested = False
         self._validated = False
         self._required_num_inputs = None
+        self._depth = 0
         self._validate_layer_options()
 
     def __setattr__(self, __name: str, __value: Any) -> None:
@@ -198,7 +200,7 @@ class Layer:
                 self.build(inputs.shape)
                 self.connect(inputs)
                 return self
-            elif isinstance(inputs, (ndarray, DeviceArray)):
+            elif isinstance(inputs, (ndarray, DeviceArray, DynamicJaxprTracer)):
                 self.build(inputs.shape)
                 if has_multiple_inputs:
                     return self.call(*inputs, *args, **kwargs)
@@ -526,7 +528,8 @@ class Squeeze(Layer):
         self.built = True
 
     def squeeze_op(self, params, inputs):
-        return jnp.squeeze(inputs, self.axis)
+        print(params, inputs)
+        return lax.squeeze(inputs, (self.axis,))
 
     def call(self, inputs):
         return self.squeeze_op(self.params, inputs)
