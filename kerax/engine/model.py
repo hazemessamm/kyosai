@@ -150,7 +150,7 @@ class _Model:
             validation_dataset = None
 
         for epoch in range(1, epochs + 1):
-            self._metrics_values.clear()
+            self.metrics_values.clear()
             with trange(
                 len(dataset),
                 bar_format="{l_bar}{bar:40}{r_bar}{bar:-20b}",
@@ -163,8 +163,8 @@ class _Model:
                     self._test_step(validation_dataset)
 
                     for metric_name, metric_instance in self.metrics_instances.items():
-                        self._metrics_values.update(
+                        self.metrics_values.update(
                             {metric_name: metric_instance(batch_y, predictions)}
                         )
 
-                    prog_bar.set_postfix(**self._metrics_values)
+                    prog_bar.set_postfix(**self.metrics_values)

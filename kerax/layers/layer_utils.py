@@ -3,7 +3,7 @@ from jax import jit
 from kerax import backend
 
 
-def _check_seed(seed):
+def _check_seed(seed: int):
     if seed is None:
         return np.random.randint(1e6)
     elif not isinstance(seed, int):
