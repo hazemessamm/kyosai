@@ -198,16 +198,22 @@ class GraphV2(_Model):
                 del dependencies[layer_name]
             else:
                 dependencies[layer_name] = required_dependencies
-            
+
             has_multiple_dependecies = len(required_dependencies) > 1
             is_input_layer = len(required_dependencies) == 0
 
             if is_input_layer:
-                layer_fn = self._make_layer_function(layer, has_multiple_dependecies, is_input_layer, num_input_layers, self.multiple_branches,)
+                layer_fn = self._make_layer_function(
+                    layer,
+                    has_multiple_dependecies,
+                    is_input_layer,
+                    num_input_layers,
+                    self.multiple_branches,
+                )
                 num_input_layers += 1
             else:
                 layer_fn = self._make_layer_function(layer, has_multiple_dependecies)
-            
+
             if not layer_fn:
                 raise ValueError(
                     f"Cannot find an appropriate function for that layer {layer_name}"
