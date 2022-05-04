@@ -114,7 +114,9 @@ class MultiHeadAttention(Layer):
         queries = self._transpose_qkv(
             self.q_dense.call_with_external_weights(params[0], query)
         )
-        keys = self._transpose_qkv(self.k_dense.call_with_external_weights(params[1], key))
+        keys = self._transpose_qkv(
+            self.k_dense.call_with_external_weights(params[1], key)
+        )
         values = self._transpose_qkv(
             self.v_dense.call_with_external_weights(params[2], value)
         )

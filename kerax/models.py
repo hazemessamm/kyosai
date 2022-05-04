@@ -10,24 +10,29 @@ from kerax.layers.core import Input, Layer
 def all_input_instances(arg):
     return all([isinstance(x, Input) for x in arg])
 
+
 def all_layer_instances(arg):
     return all([isinstance(x, Layer) for x in arg])
+
 
 def is_functional_params(*args, **kwargs):
     is_functional = False
     for i, arg in enumerate(args):
         if isinstance(arg, (list, tuple)):
-            is_functional = all_input_instances(arg) if i == 0 else all_layer_instances(arg)
+            is_functional = (
+                all_input_instances(arg) if i == 0 else all_layer_instances(arg)
+            )
         else:
             if i == 0 and isinstance(arg, Input):
                 is_functional = True
             elif isinstance(arg, Layer):
                 is_functional = True
 
-
     for i, arg in enumerate(kwargs.values()):
         if isinstance(arg, (list, tuple)):
-            is_functional = all_input_instances(arg) if i == 0 else all_layer_instances(arg)
+            is_functional = (
+                all_input_instances(arg) if i == 0 else all_layer_instances(arg)
+            )
         else:
             if i == 0 and isinstance(arg, Input):
                 is_functional = True

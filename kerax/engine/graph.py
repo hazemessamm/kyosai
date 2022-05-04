@@ -53,7 +53,7 @@ class GraphV2(_Model):
         return inputs, outputs
 
     def get_branches(self):
-        '''Returns the network branches
+        """Returns the network branches
         Example:
 
         # Branch 1
@@ -76,7 +76,7 @@ class GraphV2(_Model):
         concatenate = kerax.layers.Concatenate()([flatten1, flatten2, flatten3])
 
         So this method will return a list that contains 3 OrderedDict instances, each one contains a branch
-        '''
+        """
         branches = [OrderedDict([(_input.name, _input)]) for _input in self.inputs]
         multiple_branches = len(branches) > 1
 
@@ -100,14 +100,14 @@ class GraphV2(_Model):
         input_layer_index=None,
         multiple_branches=False,
     ):
-        '''
+        """
             Creates a function for every layer to handle it is input properly
             Args:
                 - layer: Accepts `Layer` subclass.
                 - multiple_dependencies: Accepts boolean value, checks whether this layer takes it's input from multiple other layers or not.
                 - is_input_layer: If True, it will treat that layer as input and it will create a function that expects a tensor or a list of tensors.
                 - multiple_branches: if `is_input_layer` is True, and there are multiple input layers then `multiple_branches` should be true to handle the input tensors properly
-        '''
+        """
 
         # If the layer expects multiple inputs other than the `inputs` argument then the inputs should be unpacked.
         requires_unpacking = (
@@ -122,7 +122,10 @@ class GraphV2(_Model):
                         try:
                             return layer.call_with_external_weights(params, *inputs)
                         except TypeError as e:
-                            raise ValueError(f"Error in layer: {layer.name}, Error: {e}")
+                            raise ValueError(
+                                f"Error in layer: {layer.name}, Error: {e}"
+                            )
+
                     return _call_mult_outs
                 else:
                     # returning a function that recieves multiple outputs from other layers
@@ -130,7 +133,10 @@ class GraphV2(_Model):
                         try:
                             return layer.call_with_external_weights(params, inputs)
                         except TypeError as e:
-                            raise ValueError(f"Error in layer: {layer.name}, Error: {e}")
+                            raise ValueError(
+                                f"Error in layer: {layer.name}, Error: {e}"
+                            )
+
                     return _call_mult_deps
             else:
                 # returning a function that recieves single output from other layer
@@ -139,6 +145,7 @@ class GraphV2(_Model):
                         return layer.call_with_external_weights(params, inputs[0])
                     except TypeError as e:
                         raise ValueError(f"Error in layer: {layer.name}, Error: {e}")
+
                 return _call_single_dep
         else:
             if multiple_branches:
@@ -146,12 +153,14 @@ class GraphV2(_Model):
                 # and has multiple input layers
                 def _call_mult_inputs(params, inputs):
                     return inputs[input_layer_index]
+
                 return _call_mult_inputs
             else:
                 # returning a function that recieves a single input for single
                 # input layer
                 def _call_single_input(params, inputs):
                     return inputs
+
                 return _call_single_input
 
     def _loop_over_layers_in_branches(self, branches):
@@ -160,14 +169,14 @@ class GraphV2(_Model):
                 yield layer_name, layer
 
     def create_graph(self, branches):
-        '''Returns the depedencies map, layers map, parameters, layer functions
+        """Returns the depedencies map, layers map, parameters, layer functions
 
             This method takes the created branches from `get_branches` method and creates the following:
                 1. Dependecies map: a dictionary that describes each layer dependencies (which layer depends on which layer).
                 2. layers: a dictionary that has layer names as keys and layer instances as values.
                 3. parameters: a list of tuples that contains the network parameters.
                 4. layer functions: a dictionary that has layer names as keys and layer functions as values.
-        '''
+        """
         dependencies = OrderedDict()
         layers = OrderedDict()
         layer_functions = OrderedDict()
@@ -178,13 +187,15 @@ class GraphV2(_Model):
             layers[layer_name] = layer
 
             if layer_name not in on_hold_dependencies:
-                required_outputs_from = [node.name for node in layer._node_container.inbound_nodes]
+                required_outputs_from = [
+                    node.name for node in layer._node_container.inbound_nodes
+                ]
             else:
                 required_outputs_from = on_hold_dependencies[layer_name]
 
             if layer_name in dependencies:
                 on_hold_dependencies[layer_name] = dependencies[layer_name]
-                del(dependencies[layer_name])
+                del dependencies[layer_name]
 
             dependencies[layer_name] = required_outputs_from
             if len(required_outputs_from) == 0:
@@ -210,7 +221,6 @@ class GraphV2(_Model):
         for dep_name in dependencies.keys():
             parameters.append(layers[dep_name].params)
         return dependencies, layers, parameters, layer_functions
-
 
     def call_with_external_weights(self, params, inputs):
         saved_outputs = {}

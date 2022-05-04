@@ -15,6 +15,7 @@ class Optimizer:
         - model: stores the model to update it's weights every step
         - learning_rate: stores the learning rate (step_size), default: 0.0001
     """
+
     def __init__(self, learning_rate=0.0001):
         self.learning_rate = learning_rate
         self.step_index = 0

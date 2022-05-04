@@ -22,7 +22,6 @@ class _Model:
             self.__call__ = jit(self.__call__)
             self.call_with_external_weights = jit(self.call_with_external_weights)
 
-
     def _setup_aliases(self):
         self.predict = self.__call__
         self.predict_with_external_weights = self.call_with_external_weights
@@ -167,6 +166,5 @@ class _Model:
                         self._metrics_values.update(
                             {metric_name: metric_instance(batch_y, predictions)}
                         )
-
 
                     prog_bar.set_postfix(**self._metrics_values)

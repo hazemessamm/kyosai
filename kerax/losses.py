@@ -96,6 +96,7 @@ class CategoricalCrossEntropy(Loss):
 
     def __init__(self, from_logits=False, reduction="auto", name=None):
         super(CategoricalCrossEntropy, self).__init__(reduction, name)
+
     def call(self, y_true, y_preds):
         y_preds = jnp.clip(y_preds, self.epsilon, 1.0 - self.epsilon)
         loss = -self.reduction(y_true * jnp.log(y_preds + 1e-9))
@@ -129,6 +130,7 @@ class Huber(Loss):
         loss = optax.huber_loss(y_preds, y_true)
         loss = self.reduction(loss)
         return loss
+
 
 class BinaryCrossEntropyWithLogits(Loss):
     def __init__(self, reduction="auto", name=None):
