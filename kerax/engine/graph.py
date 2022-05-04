@@ -187,39 +187,35 @@ class GraphV2(_Model):
             layers[layer_name] = layer
 
             if layer_name not in on_hold_dependencies:
-                required_outputs_from = [
+                required_dependencies = [
                     node.name for node in layer._node_container.inbound_nodes
                 ]
             else:
-                required_outputs_from = on_hold_dependencies[layer_name]
+                required_dependencies = on_hold_dependencies[layer_name]
 
             if layer_name in dependencies:
                 on_hold_dependencies[layer_name] = dependencies[layer_name]
                 del dependencies[layer_name]
+            else:
+                dependencies[layer_name] = required_dependencies
+            
+            has_multiple_dependecies = len(required_dependencies) > 1
+            is_input_layer = len(required_dependencies) == 0
 
-            dependencies[layer_name] = required_outputs_from
-            if len(required_outputs_from) == 0:
-                layer_fn = self._make_layer_function(
-                    layer,
-                    len(required_outputs_from) > 1,
-                    True,
-                    num_input_layers,
-                    self.multiple_branches,
-                )
+            if is_input_layer:
+                layer_fn = self._make_layer_function(layer, has_multiple_dependecies, is_input_layer, num_input_layers, self.multiple_branches,)
                 num_input_layers += 1
             else:
-                layer_fn = self._make_layer_function(
-                    layer, len(required_outputs_from) > 1
-                )
-            if layer_fn is not None:
-                layer_functions[layer_name] = layer_fn
-            else:
+                layer_fn = self._make_layer_function(layer, has_multiple_dependecies)
+            
+            if not layer_fn:
                 raise ValueError(
                     f"Cannot find an appropriate function for that layer {layer_name}"
                 )
 
-        for dep_name in dependencies.keys():
-            parameters.append(layers[dep_name].params)
+            layer_functions[layer_name] = layer_fn
+
+        parameters = [layers[dep_name].params for dep_name in dependencies.keys()]
         return dependencies, layers, parameters, layer_functions
 
     def call_with_external_weights(self, params, inputs):
@@ -236,7 +232,7 @@ class GraphV2(_Model):
                 )
 
         if len(self.outputs) > 1:
-            [saved_outputs[layer.name] for layer in self.outputs]
+            return [saved_outputs[layer.name] for layer in self.outputs]
         else:
             return saved_outputs[self.outputs[0].name]
 

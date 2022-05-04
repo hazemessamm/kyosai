@@ -29,7 +29,7 @@ class _Model:
     def __getattribute__(self, __name: str):
         if __name == "compile":
             self._compiled = True
-            self._metrics_values = {}
+            self.metrics_values = {}
         return super().__getattribute__(__name)
 
     def __setattr__(self, __name: str, __value: Any) -> None:
@@ -109,7 +109,7 @@ class _Model:
         )
         params = self.optimizer.minimize(self.params, gradients)
         self.update_weights(params)
-        self._metrics_values.update({"loss": loss})
+        self.metrics_values.update({"loss": loss})
         return predictions
 
     def test_step(self, validation_dataset):
@@ -117,7 +117,7 @@ class _Model:
         for _ in range(validation_dataset.num_batches):
             batch_x, batch_y = validation_dataset.get_batch()
             avg_valid_loss += self.loss(batch_x, batch_y, return_gradients=False)
-        self._metrics_values.update({"Validation loss": avg_valid_loss})
+        self.metrics_values.update({"Validation loss": avg_valid_loss})
 
     def _test_step(self, validation_dataset):
         if validation_dataset is None:
