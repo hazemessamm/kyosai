@@ -11,9 +11,9 @@ from jax.random import PRNGKey
 from kerax import activations, backend
 from kerax.engine.containers import NodeContainer, Weight
 from kerax.initializers import Initializer, initializers
-from kerax.layers import layer_utils
 from numpy import ndarray
 from jax.interpreters.partial_eval import DynamicJaxprTracer
+from kerax.engine import layer_utils
 
 
 # Not used or ready yet

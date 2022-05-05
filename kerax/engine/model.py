@@ -1,26 +1,25 @@
 from typing import Any
 
 from jax import jit
-
 from kerax import backend, losses, optimizers
-from kerax.engine import data_adapter
-from tqdm import trange
-
+from kerax.engine import data_adapter, layer_utils
+from kerax.engine.utils import ProgressBar
 
 class _Model:
     def __init__(self, name=None, trainable=False, sequential=False):
         backend.memoize(self.__class__.__name__ if name is None else name)
         self.sequential = sequential
-        self._setup_aliases()
         self._built = False
-        self.trainable = trainable
         self._compiled = False
+        self.trainable = trainable
         self.metrics_instances = {}
         self._params = []
         self.history = {}
         if backend.is_jit_enabled():
             self.__call__ = jit(self.__call__)
             self.call_with_external_weights = jit(self.call_with_external_weights)
+
+        self._setup_aliases()
 
     def _setup_aliases(self):
         self.predict = self.__call__
@@ -109,7 +108,7 @@ class _Model:
         )
         params = self.optimizer.minimize(self.params, gradients)
         self.update_weights(params)
-        self.metrics_values.update({"loss": loss})
+        self.metrics_values.update({"Loss": loss})
         return predictions
 
     def test_step(self, validation_dataset):
@@ -149,22 +148,20 @@ class _Model:
         else:
             validation_dataset = None
 
+        # desc = [' {}: {}'.format(x, {}) for x in self.metrics_instances.keys()]
+        progbar = ProgressBar(len(dataset))
+
         for epoch in range(1, epochs + 1):
             self.metrics_values.clear()
-            with trange(
-                len(dataset),
-                bar_format="{l_bar}{bar:40}{r_bar}{bar:-20b}",
-                ascii=" =",
-                unit="batch",
-            ) as prog_bar:
-                for _ in prog_bar:
-                    batch_x, batch_y = dataset.get_batch()
-                    predictions = self.train_step(batch_x, batch_y)
-                    self._test_step(validation_dataset)
+            for epoch in range(len(dataset)):
+                batch_x, batch_y = dataset.get_batch()
+                predictions = self.train_step(batch_x, batch_y)
+                self._test_step(validation_dataset)
 
-                    for metric_name, metric_instance in self.metrics_instances.items():
-                        self.metrics_values.update(
-                            {metric_name: metric_instance(batch_y, predictions)}
-                        )
+                # for metric_name, metric_instance in self.metrics_instances.items():
+                #     self.metrics_values.update(
+                #         {metric_name: metric_instance(batch_y, predictions)}
+                #     )
 
-                    prog_bar.set_postfix(**self.metrics_values)
+                progbar.update(epoch, **self.metrics_values)
+            progbar.reset()

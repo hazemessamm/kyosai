@@ -13,8 +13,7 @@ setup(
         'numpy',
         'jax==0.3.4',
         'jaxlib==0.3.2',
-        'optax',
-        'tqdm'
+        'optax'
     ],
     url='https://github.com/hazemessamm/kerax',
 )
