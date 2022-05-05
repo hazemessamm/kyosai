@@ -6,7 +6,7 @@ import jax
 from jax import numpy as jnp
 from kerax.engine import generic_utils
 from kerax.engine.model import _Model
-
+import operator as op
 
 class GraphV2(_Model):
     allowed_kwargs = {"inputs", "outputs"}
@@ -50,6 +50,8 @@ class GraphV2(_Model):
                 raise ValueError("Output is not passed correctly")
             else:
                 outputs = jax.tree_flatten(args[consumed_args])[0]
+
+        self._output_names = [o.name for o in outputs]
         return inputs, outputs
 
     def get_branches(self):
@@ -228,19 +230,19 @@ class GraphV2(_Model):
         saved_outputs = {}
         for param, (layer_name, layer_deps) in zip(params, self._dependencies.items()):
 
-            if len(layer_deps) == 0:
+            if not layer_deps:
                 saved_outputs[layer_name] = self._layer_functions[layer_name](
                     param, inputs
                 )
             else:
                 saved_outputs[layer_name] = self._layer_functions[layer_name](
-                    param, [saved_outputs[v] for v in layer_deps]
-                )
+                    param, [op.itemgetter(*layer_deps)(saved_outputs)])
 
         if len(self.outputs) > 1:
-            return [saved_outputs[layer.name] for layer in self.outputs]
+            return [op.itemgetter(*self._output_names)(saved_outputs)]
         else:
-            return saved_outputs[self.outputs[0].name]
+            return saved_outputs[self._output_names[0]]
 
     def __call__(self, inputs, *args, **kwargs):
         return self.call_with_external_weights(self._params, inputs)
+

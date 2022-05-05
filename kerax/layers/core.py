@@ -528,7 +528,6 @@ class Squeeze(Layer):
         self.built = True
 
     def squeeze_op(self, params, inputs):
-        print(params, inputs)
         return lax.squeeze(inputs, (self.axis,))
 
     def call(self, inputs):
