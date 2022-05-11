@@ -8,6 +8,7 @@ from kerax.engine import generic_utils
 from kerax.engine.model import _Model
 import operator as op
 
+
 class GraphV2(_Model):
     allowed_kwargs = {"inputs", "outputs"}
 
@@ -236,7 +237,8 @@ class GraphV2(_Model):
                 )
             else:
                 saved_outputs[layer_name] = self._layer_functions[layer_name](
-                    param, [op.itemgetter(*layer_deps)(saved_outputs)])
+                    param, [op.itemgetter(*layer_deps)(saved_outputs)]
+                )
 
         if len(self.outputs) > 1:
             return [op.itemgetter(*self._output_names)(saved_outputs)]
@@ -245,4 +247,3 @@ class GraphV2(_Model):
 
     def __call__(self, inputs, *args, **kwargs):
         return self.call_with_external_weights(self._params, inputs)
-

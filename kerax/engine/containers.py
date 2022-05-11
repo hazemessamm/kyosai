@@ -3,7 +3,6 @@ from jax.random import PRNGKey
 from kerax.initializers import Initializer, initializers
 
 
-
 class Weight:
     def __init__(
         self,

@@ -1,19 +1,12 @@
-import inspect
 import operator as op
 from functools import reduce
-from typing import Any, Callable, List, Tuple, Union
+from typing import Callable, Tuple, Union
 
 from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax.numpy import DeviceArray
-from jax.random import PRNGKey
-from kerax import activations, backend
-from kerax.engine.containers import NodeContainer, Weight
-from kerax.initializers import Initializer, initializers
-from numpy import ndarray
-from jax.interpreters.partial_eval import DynamicJaxprTracer
-from kerax.engine import layer_utils
+from kerax.layers.base_layer import Layer
 
 
 # Not used or ready yet
@@ -32,223 +25,6 @@ class InputSpec:
         self.input_shape = input_shape
         self.valid_ndims = valid_ndims
         self._internal_input_shape = (None, *input_shape)
-
-
-class Layer:
-    def __init__(
-        self,
-        seed: int = None,
-        trainable: bool = True,
-        dtype: str = "float32",
-        name: str = None,
-        **kwargs,
-    ):
-        self.name = backend.memoize(self.__class__.__name__ if name is None else name)
-        layer_utils._check_jit(self)
-
-        # Stores the layer params
-        self._params = []
-
-        # Stores the previous layer
-        self._node_container = NodeContainer()
-        self.seed = PRNGKey(layer_utils._check_seed(seed))
-        self.trainable = trainable
-        self.dtype = dtype or backend.precision()
-        self.built = False
-        self._has_nested_layers = False
-        self._is_nested = False
-        self._validated = False
-        self._required_num_inputs = None
-        self._depth = 0
-        self._validate_layer_options()
-
-    def __setattr__(self, __name: str, __value: Any) -> None:
-        if isinstance(__value, Layer):
-            if not self._has_nested_layers:
-                self._has_nested_layers = True
-                self._nested_layers = [__value]
-            else:
-                self._nested_layers.append(__value)
-            __value._is_nested = True
-        return super().__setattr__(__name, __value)
-
-    def _validate_layer_options(self):
-        call_params = inspect.signature(self.call).parameters
-        self._required_number_inputs = len(call_params)
-
-        call_with_external_weights_params = inspect.signature(
-            self.call_with_external_weights
-        ).parameters
-        if "params" not in call_with_external_weights_params:
-            raise ValueError(
-                f"`params` argument should be added as the first argument in `call_with_external_weights` function. Recieved: {call_with_external_weights_params.keys()}"
-            )
-
-    @property
-    def shape(self):
-        return None
-
-    def compute_output_shape(self, input_shape: Union[List, Tuple]):
-        raise NotImplementedError("should be implemented in a subclass.")
-
-    @property
-    def input_shape(self):
-        if self.built:
-            return self._input_shape
-        raise Exception(f"Error in {self.name}, Layer is not built yet")
-
-    def compute_output_shape(self, input_shape):
-        raise NotImplementedError("Should be implemented in a subclass")
-
-    @property
-    def weights(self):
-        "returns weights"
-        return self._params
-
-    @property
-    def params(self):
-        params = [param.get_weights() for param in self._params]
-        if self._has_nested_layers:
-            nested_params = tuple(layer.params for layer in self._nested_layers)
-            params.extend(nested_params)
-        return tuple(params)
-
-    @property
-    def named_params(self):
-        return {param.name: param.get_weights() for param in self._params}
-
-    def build(self, input_shape: Tuple):
-        return NotImplementedError("Should be implemented in a subclass")
-
-    def get_initializer(self, identifier: Union[str, Initializer]):
-        "Returns the specified initializer"
-        return initializers.get(identifier)
-
-    def get_activation(self, identifier: Union[str, Initializer]):
-        "Returns the specified activation"
-        return activations.get(identifier)
-
-    def connect(self, layer):
-        "Connects the current layer with the previous layer"
-        self._node_container.connect_nodes(self, layer)
-
-    def add_weight(
-        self,
-        key: PRNGKey,
-        shape: Tuple,
-        initializer: Initializer,
-        dtype: str,
-        name: str,
-        trainable: bool,
-    ):
-        weight = Weight(key, shape, initializer, dtype, name, trainable)
-        self._params.append(weight)
-        return weight
-
-    def get_weights(self):
-        return self._params
-
-    def set_weights(self, new_weights: Tuple):
-        if len(new_weights) > 0:
-            if self._has_nested_layers:
-                for layer in self._nested_layers:
-                    for w1, w2 in zip(layer._params, new_weights):
-                        w1.set_weights(w2)
-            else:
-                for w1, w2 in zip(self._params, new_weights):
-                    w1.set_weights(w2)
-
-    def update_weights(self, new_weights: Tuple):
-        if len(new_weights) > 0:
-            for w_old, w_new in zip(self._params, new_weights):
-                w_old.update_weights(w_new)
-
-            if self._has_nested_layers:
-                for layer, new_weight in zip(self._nested_layers, new_weights):
-                    for w_old, w_new in zip(layer._params, new_weight):
-                        w_old.update_weights(w_new)
-
-    def check_shape_if_built(self, layers):
-        if isinstance(layers, (list, tuple)):
-            for l in layers:
-                if self.input_shape != l.shape:
-                    raise ValueError(
-                        f"This input shape of layer {self.name} does not match the output shape of layer {l.name}. Expected: {self.input_shape}. Recieved: {l.shape}"
-                    )
-        else:
-            if self.input_shape != layers.shape:
-                raise ValueError(
-                    f"This input shape of layer {self.name} does not match the output shape of layer {layers.name}. Expected: {self.input_shape}. Recieved: {layers.shape}"
-                )
-
-    def __call__(self, *inputs, **kwargs):
-        if not self._required_num_inputs:
-            if len(inputs) > 1:
-                inputs = inputs[0]
-                args = inputs[1:]
-            else:
-                inputs = inputs[0]
-                args = ()
-            has_multiple_inputs = False
-        else:
-            inputs = inputs[: self._required_num_inputs]
-            args = inputs[self._required_num_inputs :]
-            has_multiple_inputs = True
-
-        if not self.built:
-            if isinstance(inputs, Layer):
-                self.build(inputs.shape)
-                self.connect(inputs)
-                return self
-            elif isinstance(inputs, (ndarray, DeviceArray, DynamicJaxprTracer)):
-                self.build(inputs.shape)
-                if has_multiple_inputs:
-                    return self.call(*inputs, *args, **kwargs)
-                else:
-                    return self.call(inputs, *args, **kwargs)
-            elif isinstance(inputs, (list, tuple)):
-                self.build([_input.shape for _input in inputs])
-                if all([isinstance(i, Layer) for i in inputs]):
-                    self.connect(inputs)
-                    return self
-                else:
-                    if has_multiple_inputs:
-                        return self.call(*inputs, *args, **kwargs)
-                    else:
-                        return self.call(inputs, *args, **kwargs)
-            else:
-                raise ValueError(
-                    f"`inputs` should be with type `Layer`, `ndarray`, `DeviceArray`, `list` or `tuple`. Recieved: {type(inputs)}"
-                )
-        else:
-            if isinstance(inputs, Layer):
-                self.check_shape_if_built(inputs)
-                self.connect(inputs)
-                return self
-            else:
-                if has_multiple_inputs:
-                    return self.call(*inputs, *args, **kwargs)
-                else:
-                    return self.call(inputs, *args, **kwargs)
-
-    def call(self, inputs: DeviceArray):
-        raise NotImplementedError(
-            "This method should be implemented in Layer subclasses"
-        )
-
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
-        raise NotImplementedError(
-            "This method should be implemented in Layer subclasses"
-        )
-
-    def __repr__(self):
-        if self.built:
-            return f"<{self.name} Layer with input shape {self.input_shape} and output shape {self.shape}>"
-        else:
-            return f"<{self.name} Layer>"
-
-    def __name__(self):
-        return self.name
 
 
 class Input(Layer):
@@ -367,15 +143,17 @@ class Dense(Layer):
     def call(self, inputs: DeviceArray):
         "Used during training to pass the parameters while getting the gradients"
         output = self.dense_op(self.params, inputs)
-        return lax.cond(
-            self.activation != None, lambda: self.activation(output), lambda: output
-        )
+
+        if self.activation:
+            output = self.activation(output)
+        return output
 
     def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         output = self.dense_op(params, inputs)
-        return lax.cond(
-            self.activation != None, lambda: self.activation(output), lambda: output
-        )
+
+        if self.activation:
+            output = self.activation(output)
+        return output
 
 
 class Flatten(Layer):
@@ -444,9 +222,10 @@ class Dropout(Layer):
 
     def call(self, inputs: DeviceArray, training=False):
         "Used during training to pass the parameters while getting the gradients"
-        return lax.cond(
-            training, lambda: self.dropout_op(self.params, inputs), lambda: inputs
-        )
+        if training:
+            return self.dropout_op(self.params, inputs)
+        else:
+            return inputs
 
     def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
         return self.dropout_op(params, inputs)

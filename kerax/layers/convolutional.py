@@ -4,7 +4,7 @@ from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax.numpy import DeviceArray
-from kerax.layers.core import Layer
+from kerax.layers.base_layer import Layer
 
 
 class Conv2D(Layer):
@@ -158,9 +158,10 @@ class Conv2D(Layer):
         )
         if self.use_bias:
             output = jnp.add(output, params[1])
-        return lax.cond(
-            self.activation != None, lambda: self.activation(output), lambda: output
-        )
+
+        if self.activation:
+            output = self.activation(output)
+        return output
 
     def call(self, inputs: DeviceArray):
         return self.convolution_op(self.params, inputs)

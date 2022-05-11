@@ -2,7 +2,7 @@ from typing import Tuple
 
 from jax import numpy as jnp
 from jax.numpy import DeviceArray
-from kerax.layers.core import Layer
+from kerax.layers.base_layer import Layer
 
 
 class Merge(Layer):

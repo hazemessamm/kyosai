@@ -1,4 +1,4 @@
-from kerax.layers.core import Layer
+from kerax.layers.base_layer import Layer
 from typing import Tuple, Callable, Union
 from jax import random
 from jax import lax
@@ -121,9 +121,10 @@ class Conv2DTranspose(Layer):
         )
         if self.use_bias:
             output = jnp.add(output, params[1])
-        return lax.cond(
-            self.activation != None, lambda: self.activation(output), lambda: output
-        )
+
+        if self.activation:
+            output = self.activation(output)
+        return output
 
     def call(self, inputs):
         return self.convolution_transpose_op(self.params, inputs)

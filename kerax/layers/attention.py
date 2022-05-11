@@ -1,7 +1,8 @@
 from jax import nn
 from jax import numpy as jnp
 
-from kerax.layers.core import Dense, Layer
+from kerax.layers.core import Dense
+from kerax.layers.base_layer import Layer
 
 
 class Attention(Layer):
@@ -82,10 +83,10 @@ class MultiHeadAttention(Layer):
         self.q_dense.build(query_dim)
         self.k_dense.build(key_dim)
         self.v_dense.build(value_dim)
-        self.o_dense.build(self.q.shape)
+        self.o_dense.build(self.q_dense.shape)
         self._input_shape = query_dim
         self.built = True
-        self._shape = self.o.shape
+        self._shape = self.o_dense.shape
 
     @property
     def shape(self):
@@ -101,15 +102,6 @@ class MultiHeadAttention(Layer):
         inputs = inputs.transpose(0, 2, 1, 3)
         return inputs.reshape(inputs.shape[0], inputs.shape[1], -1)
 
-    def call(self, query, key, value, mask=None):
-        queries = self._transpose_qkv(self.q_dense(query))
-        keys = self._transpose_qkv(self.k_dense(key))
-        values = self._transpose_qkv(self.v_dense(value))
-        attention = self.attention_op(queries, keys, values, mask)
-        attention = self._transpose_output(attention)
-        attention = self.o_dense(attention)
-        return attention
-
     def call_with_external_weights(self, params, query, key, value, mask=None):
         queries = self._transpose_qkv(
             self.q_dense.call_with_external_weights(params[0], query)
@@ -124,3 +116,6 @@ class MultiHeadAttention(Layer):
         attention = self._transpose_output(attention)
         attention = self.o_dense.call_with_external_weights(params[3], attention)
         return attention
+
+    def call(self, query, key, value, mask=None):
+        return self.call_with_external_weights(self.params, query, key, value, mask)

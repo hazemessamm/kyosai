@@ -5,6 +5,7 @@ from kerax import backend, losses, optimizers
 from kerax.engine import data_adapter, layer_utils
 from kerax.engine.utils import ProgressBar
 
+
 class _Model:
     def __init__(self, name=None, trainable=False, sequential=False):
         backend.memoize(self.__class__.__name__ if name is None else name)
