@@ -13,3 +13,4 @@ from kerax.layers.core import (
 )
 from kerax.layers.merge import Add, Concatenate, Merge
 from kerax.layers.pooling import AveragePooling2D, MaxPooling2D, Pooling
+from kerax.layers.embeddings import Embedding

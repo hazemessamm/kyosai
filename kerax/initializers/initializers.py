@@ -101,6 +101,14 @@ class Normal(Initializer):
         return initializer_fn(key, shape, dtype)
 
 
+class Uniform(Initializer):
+    def __call__(self, key, shape, dtype=None):
+        if dtype is None:
+            dtype = "float32"
+        initializer_fn = jax_initializers.uniform()
+        return initializer_fn(key, shape, dtype)
+
+
 supported_initializations = {
     "zeros": Zeros(),
     "ones": Ones(),
@@ -113,6 +121,7 @@ supported_initializations = {
     "lecun_normal": LecunNormal(),
     "lecun_uniform": LecunUniform(),
     "normal": Normal(),
+    "uniform": Uniform(),
 }
 
 

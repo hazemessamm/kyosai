@@ -22,7 +22,8 @@ class Conv2D(Layer):
         - input_dim_order: stores the order of the dimensions, default NHWC
             where N=Batch size, H=Height, W=Width and C=Number of channels
         - kernel_dim_order: stores the order of the dimensions, default HWIO
-            where H=Height, W=Width, I=Input Size which is the number of channels of the input and O=Output size which is the number of the filters
+            where H=Height, W=Width, I=Input Size which is the number of channels of the input
+            and O=Output size which is the number of the filters
         - output_dim_order: stores the order of the dimensions, default NHWC
 
     """
@@ -163,8 +164,8 @@ class Conv2D(Layer):
             output = self.activation(output)
         return output
 
-    def call(self, inputs: DeviceArray):
+    def call(self, inputs: DeviceArray, **kwargs):
         return self.convolution_op(self.params, inputs)
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
         return self.convolution_op(params, inputs)

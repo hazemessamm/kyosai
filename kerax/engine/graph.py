@@ -1,12 +1,10 @@
 import inspect
+import operator as op
 from collections import OrderedDict
-from typing import List
 
 import jax
-from jax import numpy as jnp
 from kerax.engine import generic_utils
 from kerax.engine.model import _Model
-import operator as op
 
 
 class GraphV2(_Model):
@@ -73,7 +71,6 @@ class GraphV2(_Model):
         input3 = kerax.layers.Input(...)
         conv1 = kerax.layers.Conv2D(...)(input3)
         flatten3 = kerax.layers.Flatten(...)(conv1)
-        
 
         # Merge
         concatenate = kerax.layers.Concatenate()([flatten1, flatten2, flatten3])
@@ -107,9 +104,12 @@ class GraphV2(_Model):
             Creates a function for every layer to handle it is input properly
             Args:
                 - layer: Accepts `Layer` subclass.
-                - multiple_dependencies: Accepts boolean value, checks whether this layer takes it's input from multiple other layers or not.
-                - is_input_layer: If True, it will treat that layer as input and it will create a function that expects a tensor or a list of tensors.
-                - multiple_branches: if `is_input_layer` is True, and there are multiple input layers then `multiple_branches` should be true to handle the input tensors properly
+                - multiple_dependencies: Accepts boolean value, checks whether this layer takes
+                    it's input from multiple other layers or not.
+                - is_input_layer: If True, it will treat that layer as input and it will create a function
+                    that expects a tensor or a list of tensors.
+                - multiple_branches: if `is_input_layer` is True, and there are multiple input layers
+                    then `multiple_branches` should be true to handle the input tensors properly
         """
 
         # If the layer expects multiple inputs other than the `inputs` argument then the inputs should be unpacked.
@@ -175,7 +175,8 @@ class GraphV2(_Model):
         """Returns the depedencies map, layers map, parameters, layer functions
 
             This method takes the created branches from `get_branches` method and creates the following:
-                1. Dependecies map: a dictionary that describes each layer dependencies (which layer depends on which layer).
+                1. Dependecies map: a dictionary that describes each layer dependencies
+                    (which layer depends on which layer).
                 2. layers: a dictionary that has layer names as keys and layer instances as values.
                 3. parameters: a list of tuples that contains the network parameters.
                 4. layer functions: a dictionary that has layer names as keys and layer functions as values.

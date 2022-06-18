@@ -115,7 +115,7 @@ class Conv2DTranspose(Layer):
         )
         self.built = True
 
-    def convolution_transpose_op(self, params, inputs):
+    def convolution_transpose_op(self, params, inputs, **kwargs):
         output = lax.conv_transpose(
             inputs, params[0], self.strides, self.padding, dimension_numbers=self.dn
         )
@@ -126,8 +126,8 @@ class Conv2DTranspose(Layer):
             output = self.activation(output)
         return output
 
-    def call(self, inputs):
+    def call(self, inputs, **kwargs):
         return self.convolution_transpose_op(self.params, inputs)
 
-    def call_with_external_weights(self, params, inputs):
+    def call_with_external_weights(self, params, inputs, **kwargs):
         return self.convolution_transpose_op(params, inputs)

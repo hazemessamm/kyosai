@@ -2,7 +2,7 @@ from typing import Any
 
 from jax import jit
 from kerax import backend, losses, optimizers
-from kerax.engine import data_adapter, layer_utils
+from kerax.engine import data_adapter
 from kerax.engine.utils import ProgressBar
 
 
@@ -16,6 +16,7 @@ class _Model:
         self.metrics_instances = {}
         self._params = []
         self.history = {}
+        self.metrics_values = {}
         if backend.is_jit_enabled():
             self.__call__ = jit(self.__call__)
             self.call_with_external_weights = jit(self.call_with_external_weights)
@@ -25,17 +26,6 @@ class _Model:
     def _setup_aliases(self):
         self.predict = self.__call__
         self.predict_with_external_weights = self.call_with_external_weights
-
-    def __getattribute__(self, __name: str):
-        if __name == "compile":
-            self._compiled = True
-            self.metrics_values = {}
-        return super().__getattribute__(__name)
-
-    def __setattr__(self, __name: str, __value: Any) -> None:
-        if isinstance(__value, losses.Loss):
-            __value.prediction_fn = self.call_with_external_weights
-        return super().__setattr__(__name, __value)
 
     @property
     def __name__(self):
@@ -87,6 +77,7 @@ class _Model:
 
         self.optimizer.initialize(self.params)
         self._get_metrics(metrics)
+        self._compiled = True
 
     def get_weights(self):
         return self._params
@@ -104,9 +95,11 @@ class _Model:
 
     def train_step(self, x, y):
         "Returns loss value and takes training batch"
-        (loss, predictions), gradients = self.loss(
-            self.params, x, y, return_gradients=True
+        gradient_fn = backend.get_model_gradients(
+            model=self, loss=self.loss, return_loss=True, return_predictions=True
         )
+
+        loss, predictions, gradients = gradient_fn(x, y)
         params = self.optimizer.minimize(self.params, gradients)
         self.update_weights(params)
         self.metrics_values.update({"Loss": loss})
@@ -116,7 +109,7 @@ class _Model:
         avg_valid_loss = 0
         for _ in range(validation_dataset.num_batches):
             batch_x, batch_y = validation_dataset.get_batch()
-            avg_valid_loss += self.loss(batch_x, batch_y, return_gradients=False)
+            avg_valid_loss += self.loss(batch_x, batch_y)
         self.metrics_values.update({"Validation loss": avg_valid_loss})
 
     def _test_step(self, validation_dataset):
@@ -149,7 +142,6 @@ class _Model:
         else:
             validation_dataset = None
 
-        # desc = [' {}: {}'.format(x, {}) for x in self.metrics_instances.keys()]
         progbar = ProgressBar(len(dataset))
 
         for epoch in range(1, epochs + 1):
@@ -158,11 +150,5 @@ class _Model:
                 batch_x, batch_y = dataset.get_batch()
                 predictions = self.train_step(batch_x, batch_y)
                 self._test_step(validation_dataset)
-
-                # for metric_name, metric_instance in self.metrics_instances.items():
-                #     self.metrics_values.update(
-                #         {metric_name: metric_instance(batch_y, predictions)}
-                #     )
-
                 progbar.update(epoch, **self.metrics_values)
             progbar.reset()

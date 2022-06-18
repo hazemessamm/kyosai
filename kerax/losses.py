@@ -3,7 +3,6 @@ from typing import NamedTuple, Union
 import optax  # type:ignore
 from jax import jit
 from jax import numpy as jnp
-from jax import value_and_grad
 
 from kerax import backend
 
@@ -15,11 +14,12 @@ class Reducer:
             self.reduce = self.reduce_by_mean
         elif reduction == "sum":
             self.reduce = self.reduce_by_sum
-        elif reduction == "none" or reduction == None:
+        elif reduction == "none" or reduction is None:
             self.reduce = lambda inputs: inputs
         else:
             raise ValueError(
-                f'`reduction` can be `"mean"`, `"sum"`, `"none"` or `None`. Recieved: {reduction}'
+                f'`reduction` can be `"mean"`, `"sum"`, '
+                f'`"none"` or `None`. Recieved: {reduction}'
             )
 
     def reduce_by_mean(self, inputs):
@@ -34,13 +34,20 @@ class Reducer:
 
 class LossOutputs(NamedTuple):
     """
-        grad() returns the gradients only and value_and_grad() 
-        evaluates the function and returns it's value and also returns it gradients.
-        It will be inefficient to return the loss value then call the same function again to return the gradients,
-        so This NamedTuple is used to return the loss, predictions (to pass them to the metrics if any) and the gradients (by using value_and_grad).
+        grad() returns the gradients only and value_and_grad()
+        evaluates the function and
+        returns it's value and also returns it gradients.
+        It will be inefficient to return the loss value then
+        call the same function again to return the gradients,
+        so This NamedTuple is used to return the loss,
+        predictions (to pass them to the metrics if any) and
+        the gradients (by using value_and_grad).
 
-        The other solution is call the network 2 times, the first one to return the predictions and pass them to the metrics and loss function,
-        The second one when calling it to track the ops and return the gradients. This solution is inefficient.
+        The other solution is call the network 2 times,
+        the first one to return the predictions and
+        pass them to the metrics and loss function,
+        The second one when calling it to track the ops and
+        return the gradients. This solution is inefficient.
     """
 
     loss: jnp.DeviceArray
@@ -48,37 +55,27 @@ class LossOutputs(NamedTuple):
 
 
 class Loss:
-    def __init__(self, reduction="auto", name=None):
+    def __init__(self, reduction="mean", name=None):
         self.reduction = Reducer(reduction)
         self.name = backend.memoize(self.__class__.__name__ if name is None else name)
         self.epsilon = 1e-12
-        self.loss_grad_fn = jit(value_and_grad(self._call, 0, has_aux=True))
-        self.prediction_fn = None
 
     @property
     def __name__(self):
         return self.name
 
-    def call(self, params, x, y):
+    def call(self, y_true, y_preds):
         raise NotImplementedError("Must be implemented in subclass")
 
-    def _call(self, params, train_x, train_y):
-        y_preds = self.prediction_fn(params, train_x)
-        loss = self.call(train_y, y_preds)
-        return LossOutputs(loss=loss, predictions=y_preds)
-
-    def __call__(self, params, train_x, y_true, return_gradients=True):
-        if not return_gradients:
-            return self._call(params, train_x, y_true)
-        else:
-            return self.loss_grad_fn(params, train_x, y_true)
+    def __call__(self, y_true, y_preds):
+        return self.call(y_true, y_preds)
 
     def get_config(self):
         return {"reduction": self.reduction, "name": self.name}
 
 
 class CategoricalCrossEntropyWithLogits(Loss):
-    def __init__(self, reduction="auto", name=None):
+    def __init__(self, reduction="mean", name=None):
         super(CategoricalCrossEntropyWithLogits, self).__init__(reduction, name)
 
     def call(self, y_true, y_preds):
@@ -104,7 +101,7 @@ class CategoricalCrossEntropy(Loss):
 
 
 class MeanSquaredError(Loss):
-    def __init__(self, reduction="auto", name=None):
+    def __init__(self, reduction="mean", name=None):
         super(MeanSquaredError, self).__init__(reduction, name)
 
     def call(self, y_true, y_preds):
@@ -113,7 +110,7 @@ class MeanSquaredError(Loss):
 
 
 class MeanAbsoluteError(Loss):
-    def __init__(self, reduction="auto", name=None):
+    def __init__(self, reduction="mean", name=None):
         super(MeanAbsoluteError, self).__init__(reduction, name)
 
     def call(self, y_true, y_preds):
@@ -122,7 +119,7 @@ class MeanAbsoluteError(Loss):
 
 
 class Huber(Loss):
-    def __init__(self, reduction="auto", delta=1.0, name=None):
+    def __init__(self, reduction="mean", delta=1.0, name=None):
         super(Huber, self).__init__(reduction, name)
         self.delta = delta
 
@@ -133,7 +130,7 @@ class Huber(Loss):
 
 
 class BinaryCrossEntropyWithLogits(Loss):
-    def __init__(self, reduction="auto", name=None):
+    def __init__(self, reduction="mean", name=None):
         super(BinaryCrossEntropyWithLogits, self).__init__(
             reduction=reduction, name=name
         )
@@ -161,7 +158,7 @@ class BinaryCrossEntropy(Loss):
 
 
 class CosineDistance(Loss):
-    def __init__(self, reduction="auto", name=None):
+    def __init__(self, reduction="mean", name=None):
         super(CosineDistance, self).__init__(reduction=reduction, name=name)
 
     def call(self, y_true, y_preds):

@@ -46,7 +46,7 @@ def enable_jit_execution(enable):
     if isinstance(enable, bool):
         _IS_JIT_ENABLED = enable
     else:
-        raise TypeError(f"`enable_jit` should be boolean. Recieved: {type(enable)}")
+        raise TypeError(f"`enable_jit` should be " f"boolean. Recieved: {type(enable)}")
 
 
 def is_jit_enabled():
@@ -63,3 +63,28 @@ def device_put(x, id):
     else:
         device = available_devices[id]
     return jax.device_put(x, device)
+
+
+def get_model_gradients(model, loss, return_predictions=False, return_loss=False):
+    def _get_loss(params, x, y):
+        preds = model.call_with_external_weights(params, x)
+        loss_val = loss(y, preds)
+        return (loss_val, preds)
+
+    _get_grads = jax.value_and_grad(_get_loss, argnums=0, has_aux=True)
+
+    def call(x, y):
+        loss_and_preds, grads = _get_grads(model.params, x, y)
+
+        returns = []
+        if return_loss:
+            returns.append(loss_and_preds[0])
+        if return_predictions:
+            returns.append(loss_and_preds[1])
+
+        if len(returns) > 0:
+            return (*returns, grads)
+        else:
+            return grads
+
+    return call

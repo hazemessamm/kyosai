@@ -27,10 +27,10 @@ class BatchNormalization(Layer):
         self.input_shape = self.shape
         self.built = True
 
-    def call(self, inputs: DeviceArray):
+    def call(self, inputs: DeviceArray, **kwargs):
         output = self.apply_fn(params=self._params, x=inputs)
         return output
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
         output = self.apply_fn(params=params, inputs=inputs)
         return output

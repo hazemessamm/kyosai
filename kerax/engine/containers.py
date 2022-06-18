@@ -34,11 +34,12 @@ class Weight:
                 self.weights = weights
             else:
                 raise ValueError(
-                    f"New weights shape does not match the current weights shape, {self.weights.shape} != {weights.shape}"
+                    f"New weights shape does not match"
+                    f"the current weights shape, {self.weights.shape} != {weights.shape}"
                 )
         else:
             raise ValueError(
-                f"Weights are not initialized yet. Use get_weights() method to initialize the weights"
+                "Weights are not initialized yet. Use get_weights() method to initialize the weights"
             )
 
     def update_weights(self, weights: DeviceArray):

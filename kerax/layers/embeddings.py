@@ -1,8 +1,66 @@
 from jax import numpy as jnp  # type: ignore
-from jax import random  # type: ignore
+import jax  # type: ignore
 from kerax.layers.base_layer import Layer
+from jax import lax
 
 
 class Embedding(Layer):
-    # TODO: Implement Embedding Layer
-    pass
+    def __init__(
+        self,
+        vocab_size,
+        embedding_dim,
+        embeddings_initializer="uniform",
+        mask_zero=False,
+        input_length=None,
+        seed=None,
+        trainable=True,
+        dtype="float32",
+        name=None,
+    ):
+        super(Embedding, self).__init__(
+            seed=seed, trainable=trainable, dtype=dtype, name=name
+        )
+        self.vocab_size = vocab_size
+        self.embedding_dim = embedding_dim
+        self.embedding_initializer = self.get_initializer(embeddings_initializer)
+        self.mask_zero = mask_zero
+        self.input_length = input_length
+
+    def build(self, input_shape):
+        self._input_shape = input_shape
+        self.input_length = input_shape[-1]
+        shape = (self.vocab_size, self.embedding_dim)
+        self._output_shape = shape
+        self.add_weight(
+            self.seed,
+            shape,
+            self.embedding_initializer,
+            self.dtype,
+            self.name,
+            self.trainable,
+        )
+
+        if self.mask_zero:
+            self._params[0][0] = 0.0
+
+        self.built = True
+
+    def embedding_lookup(self, params, inputs):
+        return params[0][(inputs,)]
+
+    def embedding_op(self, params, inputs):
+        inputs = jax.nn.one_hot(inputs, self.vocab_size, dtype=jnp.int64)
+        return jnp.dot(inputs, params[0])
+
+    def call_with_external_weights(self, params, inputs, training=True):
+        if inputs.dtype != jnp.int64:
+            if inputs.dtype in {jnp.int32, jnp.int16, jnp.int8}:
+                inputs = inputs.astype("int64")
+        return lax.select(
+            training,
+            self.embedding_op(params, inputs),
+            self.embedding_lookup(params, inputs),
+        )
+
+    def call(self, inputs, training=True):
+        return self.call_with_external_weights(self.params, inputs, training=training)

@@ -3,7 +3,7 @@ from typing import List, Tuple, Union
 from jax.numpy import DeviceArray, ndarray
 
 from kerax.engine import model
-from kerax.engine.graph import GraphV2
+from kerax.engine.graph_v3 import GraphV3
 from kerax.layers.core import Input, Layer
 
 
@@ -44,7 +44,7 @@ def is_functional_params(*args, **kwargs):
 class Model(model._Model):
     def __new__(cls, *args, **kwargs):
         if is_functional_params(*args, **kwargs):
-            return GraphV2(*args, **kwargs)
+            return GraphV3(*args, **kwargs)
         elif cls == Sequential:
             return super(Model, cls).__new__(cls)
         else:

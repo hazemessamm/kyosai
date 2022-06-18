@@ -1,8 +1,6 @@
 import optax
 from jax import jit
 
-from kerax import backend  # type: ignore
-
 
 class Optimizer:
     """
@@ -72,9 +70,9 @@ class Adam(Optimizer):
 
     Params:
         - learning_rate: stores the learning rate (step_size), default: 0.0001
-        - beta_1: a positive scalar value for beta_1, the exponential decay rate for the first moment estimates, default: 0.9
-        - beta_2: a positive scalar value for beta_2, the exponential decay rate for the second moment estimates, default: 0.999
-        - epsilon: a positive scalar value for epsilon, a small constant for numerical stability, default: 1e-8
+        - beta_1: a positive scalar value for beta_1, the exponential decay rate for the first moment estimates
+        - beta_2: a positive scalar value for beta_2, the exponential decay rate for the second moment estimates
+        - epsilon: a positive scalar value for epsilon, a small constant for numerical stability
     """
 
     def __init__(self, learning_rate=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08):
@@ -121,7 +119,7 @@ class RMSProp(Optimizer):
     Params:
         - loss_fn: stores the loss function to get the gradients of the loss function with respect to the params
         - model: stores the model to update it's weights every step
-        - learning_rate: stores the learning rate (step_size), default: 0.0001
+        - learning_rate: stores the learning rate (step_size)
         - momentum: a positive scalar value for momentum
     """
 

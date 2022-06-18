@@ -6,6 +6,7 @@ from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax.numpy import DeviceArray
+from kerax import activations
 from kerax.layers.base_layer import Layer
 
 
@@ -19,7 +20,8 @@ class InputSpec:
     def build(self, input_shape, valid_ndims):
         if valid_ndims != len(input_shape):
             raise Exception(
-                f"number of dims in input_shape does not match the required number of dims, found {len(input_shape)} expected {valid_ndims}"
+                f"number of dims in input_shape does not match the required number of dims."
+                f"Expected: {valid_ndims}. Recieved: {len(input_shape)}"
             )
 
         self.input_shape = input_shape
@@ -60,10 +62,14 @@ class Input(Layer):
     def build(self, input_shape: Tuple):
         self._input_shape = input_shape
 
-    def call(self, inputs: DeviceArray):
+    def call(self, inputs: DeviceArray, **kwargs):
+        if inputs.dtype != self.dtype:
+            raise ValueError(
+                f"`input` should have dtype `{self.dtype}`. Recieved: {inputs.dtype}"
+            )
         return inputs
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
         return inputs
 
 
@@ -136,11 +142,11 @@ class Dense(Layer):
             )
         self.built = True
 
-    def dense_op(self, params: Tuple, inputs: DeviceArray):
+    def dense_op(self, params: Tuple, inputs: DeviceArray, **kwargs):
         output = jnp.matmul(inputs, params[0])
         return jnp.add(output, params[1]) if self.use_bias else output
 
-    def call(self, inputs: DeviceArray):
+    def call(self, inputs: DeviceArray, **kwargs):
         "Used during training to pass the parameters while getting the gradients"
         output = self.dense_op(self.params, inputs)
 
@@ -148,7 +154,7 @@ class Dense(Layer):
             output = self.activation(output)
         return output
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
         output = self.dense_op(params, inputs)
 
         if self.activation:
@@ -159,7 +165,7 @@ class Dense(Layer):
 class Flatten(Layer):
     """
     Flatten Layer, (Layer subclass)
-    params: 
+    params:
     key: Pseudo Random Generator Key, default PRNGKey(1)
 
     """
@@ -182,12 +188,12 @@ class Flatten(Layer):
     def flatten_op(self, params: Tuple, inputs: DeviceArray):
         return lax.reshape(inputs, (inputs.shape[0], *self.shape[1:]))
 
-    def call(self, inputs: DeviceArray):
+    def call(self, inputs: DeviceArray, **kwargs):
         "Used during training to pass the parameters while getting the gradients"
         output = self.flatten_op(self.params, inputs)
         return output
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
         return self.flatten_op(params, inputs)
 
 
@@ -204,7 +210,6 @@ class Dropout(Layer):
         super(Dropout, self).__init__(seed=seed, **kwargs)
         self.rate = rate
 
-    @property
     def compute_output_shape(self):
         return self._input_shape
 
@@ -220,15 +225,17 @@ class Dropout(Layer):
         keep = random.bernoulli(self.seed, self.rate, inputs.shape)
         return jnp.where(keep, inputs / self.rate, 0)
 
-    def call(self, inputs: DeviceArray, training=False):
-        "Used during training to pass the parameters while getting the gradients"
-        if training:
-            return self.dropout_op(self.params, inputs)
-        else:
-            return inputs
+    def identity_op(self, params, inputs):
+        return inputs
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
-        return self.dropout_op(params, inputs)
+    def call(self, inputs: DeviceArray, training=True):
+        "Used during training to pass the parameters while getting the gradients"
+        return lax.select(training, self.dropout_op(self.params, inputs), inputs)
+
+    def call_with_external_weights(
+        self, params: Tuple, inputs: DeviceArray, training=True
+    ):
+        return lax.select(training, self.dropout_op(self.params, inputs), inputs)
 
 
 class Activation(Layer):
@@ -303,7 +310,7 @@ class Squeeze(Layer):
 
     def build(self, input_shape: Tuple):
         self._input_shape = input_shape
-        self._shape = (*input_shape[: self.axis], *input_shape[self.axis + 1 :])
+        self._shape = (*input_shape[: self.axis], *input_shape[self.axis + 1:])
         self.built = True
 
     def squeeze_op(self, params, inputs):

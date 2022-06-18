@@ -1,4 +1,7 @@
 def flatten(x):
+    if not isinstance(x, (list, tuple)):
+        return [x]
+
     def _flatten(x, result=[]):
         for i in x:
             if isinstance(i, list):

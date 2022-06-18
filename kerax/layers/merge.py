@@ -37,7 +37,8 @@ class Merge(Layer):
 
             if len(axis_list) != 1:
                 raise ValueError(
-                    f"`input_shape` contains unmatched axis. Recieved: axis={self.supported_axis} and different axis are {axis_list}"
+                    f"`input_shape` contains unmatched axis."
+                    f"Recieved: axis={self.supported_axis} and different axis are {axis_list}"
                 )
 
     def build(self, input_shape: Tuple):
@@ -85,10 +86,10 @@ class Concatenate(Merge):
     def concatenate_op(self, params: Tuple, inputs: DeviceArray):
         return jnp.concatenate(inputs, axis=self.supported_axis)
 
-    def call(self, inputs: DeviceArray):
+    def call(self, inputs: DeviceArray, **kwargs):
         return self.concatenate_op(self.params, inputs)
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
         return self.concatenate_op(params, inputs)
 
 
@@ -110,8 +111,8 @@ class Add(Merge):
     def build(self, input_shape: Tuple):
         super().build(input_shape)
 
-    def call(self, inputs: DeviceArray):
+    def call(self, inputs: DeviceArray, **kwargs):
         return self.add_op(self._params, inputs)
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
         return self.add_op(params, inputs)
