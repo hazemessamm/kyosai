@@ -12,7 +12,6 @@ class ProgressBar:
         self._start_time = time.time()
         self._new_line = False
         self._unit = unit
-        self._msg_format = "\r{epoch}/{total} [{bar}] {percent:.2f}% "
 
     def update(self, epoch, **kwargs):
         percent = math.ceil((epoch / self.total) * 100)
@@ -25,7 +24,7 @@ class ProgressBar:
             ]
         )
         # time_per_step = time.time()'
-        bar = self._msg_format.format(
+        bar = "\r{epoch}/{total} [{bar}] {percent:.2f}% ".format(
             epoch=epoch, total=self.total, bar=bar, percent=percent
         )
         bar = "".join(
@@ -36,14 +35,17 @@ class ProgressBar:
                 ),
             ]
         )
-        self._print_message(bar, self._new_line)
+        self._print_message(bar)
         self._new_line = False
 
-    def _print_message(self, msg, new_line=False):
-        if new_line:
-            msg = "".join([msg, "\n"])
-        sys.stdout.write(msg)
+    def _print_message(self, msg):
+        if self._new_line:
+            sys.stdout.write("\n")
+            sys.stdout.write(msg)
+        else:
+            sys.stdout.write(msg)
 
     def reset(self):
         self._done = 0
         self._new_line = True
+        sys.stdout.flush()

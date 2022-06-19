@@ -12,6 +12,7 @@ class Pooling(Layer):
         pool_size: Union[int, Tuple] = (2, 2),
         strides: Union[int, Tuple] = (2, 2),
         padding: str = "valid",
+        dims: int = 2,
         seed: int = None,
         dtype="float32",
         name=None,
@@ -23,6 +24,7 @@ class Pooling(Layer):
         self.pool_size = pool_size
         self.strides = strides
         self.padding = padding
+        self.dims = dims
         self._validate_init()
 
         input_shape = kwargs.get("input_shape", False)
@@ -31,14 +33,14 @@ class Pooling(Layer):
 
     def _validate_init(self):
         if isinstance(self.pool_size, int):
-            self.pool_size = (self.pool_size, self.pool_size)
-        elif isinstance(self.pool_size, tuple) and len(self.pool_size) == 1:
-            self.pool_size += self.pool_size
+            self.pool_size = tuple(self.pool_size for _ in range(self.dims))
+        elif isinstance(self.pool_size, tuple) and len(self.pool_size) != self.dims:
+            self.pool_size += tuple(self.pool_size for _ in range(self.dims))
 
         if isinstance(self.strides, int):
-            self.strides = (self.strides, self.strides)
-        elif isinstance(self.strides, tuple) and len(self.strides) == 1:
-            self.strides += self.strides
+            self.strides = tuple(self.strides for _ in range(self.dims))
+        elif isinstance(self.strides, tuple) and len(self.strides) != self.dims:
+            self.strides += tuple(self.strides for _ in range(self.dims))
 
         self.padding = self.padding.upper()
 
@@ -56,13 +58,17 @@ class Pooling(Layer):
             input_shape, self.pool_size, self.strides, self.padding
         )
 
+        num_dims = tuple(1 for _ in range(self.dims))
+        base_dilation = (1, *num_dims, 1)
+        window_dilation = (1, *num_dims, 1)
+
         out_shape = lax.reduce_window_shape_tuple(
             operand_shape=input_shape,
             window_dimensions=self.pool_size,
             window_strides=self.strides,
             padding=padding_vals,
-            base_dilation=(1, 1, 1, 1),
-            window_dilation=(1, 1, 1, 1),
+            base_dilation=base_dilation,
+            window_dilation=window_dilation,
         )
         return out_shape
 
@@ -74,6 +80,52 @@ class Pooling(Layer):
         self._input_shape = input_shape
         self._shape = (None, *self.compute_output_shape()[1:])
         self.built = True
+
+
+class MaxPooling1D(Pooling):
+    """
+    MaxPool Layer, (Layer subclass)
+    Params:
+        - pool_size: takes the pooling size, default (2,2), accepts int or tuple
+        - strides: stores size of the strides, default (1,1), accepts int or tuple
+        - padding: padding for the input, accepts "valid" or "same"
+        - spec: store the layer specs
+        - key: stores Pseudo Random Generator Key, default PRNGKey(1)
+    """
+
+    def __init__(
+        self,
+        pool_size: Union[int, Tuple] = (2,),
+        strides: Union[int, Tuple] = (2,),
+        padding: str = "valid",
+        seed: int = None,
+        dtype="float32",
+        name=None,
+        **kwargs,
+    ):
+        super(MaxPooling1D, self).__init__(
+            pool_size=pool_size,
+            strides=strides,
+            padding=padding,
+            dims=1,
+            seed=seed,
+            dtype=dtype,
+            name=name,
+            **kwargs,
+        )
+
+    def maxpool_op(self, params: Tuple, inputs: DeviceArray):
+        return lax.reduce_window(
+            inputs, -jnp.inf, lax.max, self.pool_size, self.strides, self.padding
+        )
+
+    def call(self, inputs: DeviceArray, **kwargs):
+        self.output = self.maxpool_op(self.params, inputs)
+        return self.output
+
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
+        self.output = self.maxpool_op(params, inputs)
+        return self.output
 
 
 class MaxPooling2D(Pooling):
@@ -101,6 +153,7 @@ class MaxPooling2D(Pooling):
             pool_size=pool_size,
             strides=strides,
             padding=padding,
+            dims=2,
             seed=seed,
             dtype=dtype,
             name=name,

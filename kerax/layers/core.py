@@ -2,6 +2,7 @@ import operator as op
 from functools import reduce
 from typing import Callable, Tuple, Union
 
+import jax
 from jax import lax
 from jax import numpy as jnp
 from jax import random
@@ -206,8 +207,8 @@ class Dropout(Layer):
     key: Pseudo Random Generator Key, default PRNGKey(1)
     """
 
-    def __init__(self, rate: float, seed: int = None, **kwargs):
-        super(Dropout, self).__init__(seed=seed, **kwargs)
+    def __init__(self, rate: float, seed: int = None, name: str = None, **kwargs):
+        super(Dropout, self).__init__(seed=seed, name=name, **kwargs)
         self.rate = rate
 
     def compute_output_shape(self):
@@ -310,7 +311,7 @@ class Squeeze(Layer):
 
     def build(self, input_shape: Tuple):
         self._input_shape = input_shape
-        self._shape = (*input_shape[: self.axis], *input_shape[self.axis + 1:])
+        self._shape = (*input_shape[: self.axis], *input_shape[self.axis + 1 :])
         self.built = True
 
     def squeeze_op(self, params, inputs):

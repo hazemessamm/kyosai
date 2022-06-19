@@ -26,11 +26,15 @@ class Embedding(Layer):
         self.mask_zero = mask_zero
         self.input_length = input_length
 
+    @property
+    def shape(self):
+        return self._output_shape
+
     def build(self, input_shape):
         self._input_shape = input_shape
         self.input_length = input_shape[-1]
         shape = (self.vocab_size, self.embedding_dim)
-        self._output_shape = shape
+        self._output_shape = (self.input_length, self.embedding_dim)
         self.add_weight(
             self.seed,
             shape,
@@ -48,7 +52,7 @@ class Embedding(Layer):
     def embedding_lookup(self, params, inputs):
         return params[0][(inputs,)]
 
-    def embedding_op(self, params, inputs):
+    def embedding_op(self, params, inputs, training=True):
         inputs = jax.nn.one_hot(inputs, self.vocab_size, dtype=jnp.int64)
         return jnp.dot(inputs, params[0])
 
@@ -56,10 +60,10 @@ class Embedding(Layer):
         if inputs.dtype != jnp.int64:
             if inputs.dtype in {jnp.int32, jnp.int16, jnp.int8}:
                 inputs = inputs.astype("int64")
-        return lax.select(
+        return lax.cond(
             training,
-            self.embedding_op(params, inputs),
-            self.embedding_lookup(params, inputs),
+            lambda: self.embedding_op(params, inputs),
+            lambda: self.embedding_lookup(params, inputs),
         )
 
     def call(self, inputs, training=True):

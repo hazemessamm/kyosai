@@ -5,7 +5,7 @@ from jax.interpreters.partial_eval import DynamicJaxprTracer
 from jax.numpy import DeviceArray
 from jax.random import PRNGKey
 from kerax import activations, backend
-from kerax.engine import layer_utils
+from kerax.layers import layer_utils
 from kerax.engine.containers import NodeContainer, Weight
 from kerax.initializers import Initializer, initializers
 from numpy import ndarray
@@ -19,6 +19,7 @@ class CallFunctionUtil:
         self._has_training_arg = "training" in self._arg_names
         self._has_mask_arg = "mask" in self._arg_names
         self._accept_kwargs = self._func_specs.varkw
+        self._requires_unpacking = None
 
     def parse(self, *args, **kwargs):
         inputs = []
@@ -35,9 +36,26 @@ class CallFunctionUtil:
                 if hasattr(current_input, "shape"):
                     inputs.append(current_input)
 
-        if len(inputs) == 1:
-            inputs = inputs[0]
+        if self._requires_unpacking is None:
+            if len(inputs) == 1:
+                self._requires_unpacking = False
+                inputs = inputs[0]
+            else:
+                self._requires_unpacking = True
+        else:
+            if not self._requires_unpacking:
+                inputs = inputs[0]
+
         return inputs, extra_args, kwargs
+
+    def parse_v2(self, *args, **kwargs):
+        if args:
+            inputs = args[0]
+            args = args[1:]
+        else:
+            if self._arg_names[0] in kwargs:
+                inputs = kwargs.pop(self._arg_names[0])
+        return inputs, args, kwargs
 
 
 class Layer:
@@ -112,6 +130,8 @@ class Layer:
 
     @property
     def params(self):
+        if not self.built:
+            raise Exception("Layer is not built yet. use `build()` method.")
         params = [param.get_weights() for param in self._params]
         if self._has_nested_layers:
             nested_params = tuple(layer.params for layer in self._nested_layers)
@@ -189,7 +209,7 @@ class Layer:
                 )
 
     def __call__(self, *args, **kwargs):
-        inputs, args, kwargs = self._call_util.parse(*args, **kwargs)
+        inputs, args, kwargs = self._call_util.parse_v2(*args, **kwargs)
         if not self.built:
             if isinstance(inputs, Layer):
                 self.build(inputs.shape)
@@ -197,7 +217,7 @@ class Layer:
                 return self
             elif isinstance(inputs, (ndarray, DeviceArray, DynamicJaxprTracer)):
                 self.build(inputs.shape)
-                return self.call(*inputs, *args, **kwargs)
+                return self.call(inputs, *args, **kwargs)
             elif isinstance(inputs, (list, tuple)):
                 shapes = [i.shape for i in inputs]
                 self.build(shapes)
@@ -205,7 +225,7 @@ class Layer:
                     self.connect(inputs)
                     return self
                 else:
-                    return self.call(*inputs, *args, **kwargs)
+                    return self.call(inputs, *args, **kwargs)
             else:
                 raise ValueError(
                     f"`inputs` should be with type `Layer`, `ndarray`, `DeviceArray`, `list` or `tuple`."
@@ -217,7 +237,7 @@ class Layer:
                 self.connect(inputs)
                 return self
             else:
-                return self.call(*inputs, *args, **kwargs)
+                return self.call(inputs, *args, **kwargs)
 
     def call(self, inputs: DeviceArray, **kwargs):
         raise NotImplementedError(

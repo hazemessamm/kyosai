@@ -1,5 +1,5 @@
 from kerax.layers.attention import MultiHeadAttention
-from kerax.layers.convolutional import Conv2D
+from kerax.layers.convolutional import Conv1D, Conv2D
 from kerax.layers.convolutional_transpose import Conv2DTranspose
 from kerax.layers.core import (
     Activation,
@@ -12,5 +12,5 @@ from kerax.layers.core import (
     Squeeze,
 )
 from kerax.layers.merge import Add, Concatenate, Merge
-from kerax.layers.pooling import AveragePooling2D, MaxPooling2D, Pooling
+from kerax.layers.pooling import AveragePooling2D, MaxPooling2D, Pooling, MaxPooling1D
 from kerax.layers.embeddings import Embedding

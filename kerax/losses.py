@@ -23,7 +23,7 @@ class Reducer:
             )
 
     def reduce_by_mean(self, inputs):
-        return jnp.sum(inputs) / inputs.shape[0]
+        return jnp.mean(inputs)
 
     def reduce_by_sum(self, inputs):
         return jnp.sum(inputs)
@@ -32,33 +32,11 @@ class Reducer:
         return self.reduce(inputs)
 
 
-class LossOutputs(NamedTuple):
-    """
-        grad() returns the gradients only and value_and_grad()
-        evaluates the function and
-        returns it's value and also returns it gradients.
-        It will be inefficient to return the loss value then
-        call the same function again to return the gradients,
-        so This NamedTuple is used to return the loss,
-        predictions (to pass them to the metrics if any) and
-        the gradients (by using value_and_grad).
-
-        The other solution is call the network 2 times,
-        the first one to return the predictions and
-        pass them to the metrics and loss function,
-        The second one when calling it to track the ops and
-        return the gradients. This solution is inefficient.
-    """
-
-    loss: jnp.DeviceArray
-    predictions: jnp.DeviceArray
-
-
 class Loss:
     def __init__(self, reduction="mean", name=None):
         self.reduction = Reducer(reduction)
         self.name = backend.memoize(self.__class__.__name__ if name is None else name)
-        self.epsilon = 1e-12
+        self.epsilon = 1e-7
 
     @property
     def __name__(self):
@@ -151,10 +129,11 @@ class BinaryCrossEntropy(Loss):
         super(BinaryCrossEntropy, self).__init__(reduction, name)
 
     def call(self, y_true, y_preds):
-        lhs = y_true * jnp.log(y_preds * self.epsilon)
-        rhs = (1 - y_true) * jnp.log(1 - y_preds + self.epsilon)
-        loss = -self.reduction(lhs + rhs)
-        return loss
+        y_pred = jnp.clip(y_preds, self.epsilon, 1 - self.epsilon)
+        return -self.reduction(
+            (y_true * jnp.log(y_pred + self.epsilon))
+            + ((1 - y_true) * jnp.log(1 - y_pred + self.epsilon))
+        )
 
 
 class CosineDistance(Loss):

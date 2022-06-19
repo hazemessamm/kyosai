@@ -8,7 +8,7 @@ from kerax.engine.utils import ProgressBar
 
 class _Model:
     def __init__(self, name=None, trainable=False, sequential=False):
-        backend.memoize(self.__class__.__name__ if name is None else name)
+        self.name = backend.memoize(self.__class__.__name__ if name is None else name)
         self.sequential = sequential
         self._built = False
         self._compiled = False
@@ -95,11 +95,9 @@ class _Model:
 
     def train_step(self, x, y):
         "Returns loss value and takes training batch"
-        gradient_fn = backend.get_model_gradients(
+        loss, predictions, gradients = backend.get_model_gradients(
             model=self, loss=self.loss, return_loss=True, return_predictions=True
-        )
-
-        loss, predictions, gradients = gradient_fn(x, y)
+        )(x, y)
         params = self.optimizer.minimize(self.params, gradients)
         self.update_weights(params)
         self.metrics_values.update({"Loss": loss})

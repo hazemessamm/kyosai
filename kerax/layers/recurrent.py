@@ -1,5 +1,6 @@
 from jax import numpy as jnp  # type: ignore
 from kerax.layers.base_layer import Layer
+from kerax.layers import Dense
 
 
 class GRU(Layer):
@@ -21,11 +22,15 @@ class GRU(Layer):
         self.recurrent_activation = recurrent_activation
         self.use_bias = use_bias
         self.kernel_initializer = kernel_initializer
-        self.recurrent_initializer = recurrent_activation
+        self.recurrent_initializer = recurrent_initializer
         self.bias_initializer = bias_initializer
         self.dropout = dropout
         self.recurrent_dropout = recurrent_dropout
         self.return_sequences = return_sequences
+
+    # TODO:
+    def build(self, input_shape):
+        self._input_shape = input_shape
 
 
 class LSTM(Layer):
