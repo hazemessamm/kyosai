@@ -6,3 +6,4 @@ build/
 dist/
 *.csv
 *.ipynb
+.vscode
