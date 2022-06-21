@@ -1,6 +1,6 @@
 from jax import numpy as jnp  # type: ignore
-from kerax.layers.base_layer import Layer
 from kerax.layers import Dense
+from kerax.layers.base_layer import Layer
 
 
 class GRU(Layer):

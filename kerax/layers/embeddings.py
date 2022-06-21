@@ -1,7 +1,7 @@
-from jax import numpy as jnp  # type: ignore
 import jax  # type: ignore
-from kerax.layers.base_layer import Layer
 from jax import lax
+from jax import numpy as jnp  # type: ignore
+from kerax.layers.base_layer import Layer
 
 
 class Embedding(Layer):

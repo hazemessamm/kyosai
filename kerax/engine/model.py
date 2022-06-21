@@ -1,31 +1,20 @@
-from typing import Any
-
-from jax import jit
 from kerax import backend, losses, optimizers
 from kerax.engine import data_adapter
 from kerax.engine.utils import ProgressBar
+from kerax.layers import base_layer
 
 
-class _Model:
+class _Model(base_layer.Layer):
     def __init__(self, name=None, trainable=False, sequential=False):
+        super(_Model, self).__init__(name=name)
         self.name = backend.memoize(self.__class__.__name__ if name is None else name)
         self.sequential = sequential
-        self._built = False
         self._compiled = False
         self.trainable = trainable
         self.metrics_instances = {}
         self._params = []
         self.history = {}
         self.metrics_values = {}
-        if backend.is_jit_enabled():
-            self.__call__ = jit(self.__call__)
-            self.call_with_external_weights = jit(self.call_with_external_weights)
-
-        self._setup_aliases()
-
-    def _setup_aliases(self):
-        self.predict = self.__call__
-        self.predict_with_external_weights = self.call_with_external_weights
 
     @property
     def __name__(self):
@@ -33,17 +22,20 @@ class _Model:
 
     @property
     def layers(self):
-        if self.sequential:
-            return self._layers
-        return list(self._layers.values())
+        return self._layers
 
     @property
     def params(self):
-        return self._params
+        if self._params:
+            return self._params
+        elif self.layers:
+            return [layer.params for layer in self.layers if layer.built]
+        else:
+            return []
 
     @property
     def weights(self):
-        return self._params
+        return self.params
 
     @property
     def compiled(self):
@@ -65,7 +57,6 @@ class _Model:
                         )
 
     def compile(self, loss, optimizer, metrics=None):
-        "Takes the loss, optimizer and metrics"
         self.loss = losses.get(loss)
         self.optimizer = optimizers.get(optimizer)
 
@@ -92,6 +83,20 @@ class _Model:
         for layer, w in zip(self.layers, updated_weights):
             layer.update_weights(w)
         self._params = updated_weights
+
+    def predict(self, inputs, **kwargs):
+        kwargs.pop('training', None)
+        return self.call(inputs, training=False, **kwargs)
+
+    def predict_with_external_weights(self, params, inputs, **kwargs):
+        kwargs.pop('training', None)
+        return self.call_with_external_weights(params, inputs, training=False, **kwargs)
+
+    def __call__(self, inputs, **kwargs):
+        raise NotImplementedError('__call__ should be implemented in a subclass.')
+
+    def call_with_external_weights(self, params, inputs, **kwargs):
+        raise NotImplementedError('call_with_external_weights should be implemented in a subclass.')
 
     def train_step(self, x, y):
         "Returns loss value and takes training batch"

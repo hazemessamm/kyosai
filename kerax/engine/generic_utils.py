@@ -1,3 +1,7 @@
+from jax import jit
+from kerax import backend
+
+
 def flatten(x):
     if not isinstance(x, (list, tuple)):
         return [x]
@@ -11,3 +15,8 @@ def flatten(x):
         return result
 
     return _flatten(x, [])
+
+
+def jit_call(graph):
+    if backend.is_jit_enabled():
+        graph.call_with_external_weights = jit(graph.call_with_external_weights)

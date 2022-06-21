@@ -11,30 +11,9 @@ from kerax import activations
 from kerax.layers.base_layer import Layer
 
 
-# Not used or ready yet
-class InputSpec:
-    def __init__(self):
-        self.input_shape = None
-        self.valid_ndims = None
-        self._internal_input_shape = None
-
-    def build(self, input_shape, valid_ndims):
-        if valid_ndims != len(input_shape):
-            raise Exception(
-                f"number of dims in input_shape does not match the required number of dims."
-                f"Expected: {valid_ndims}. Recieved: {len(input_shape)}"
-            )
-
-        self.input_shape = input_shape
-        self.valid_ndims = valid_ndims
-        self._internal_input_shape = (None, *input_shape)
-
-
 class Input(Layer):
     """
     Input Layer that stores the input shape
-    params:
-    shape: takes a tuple (0, H, W, C)
     """
 
     def __init__(self, shape: Tuple = None, dtype: str = "float32", name: str = None):
@@ -231,12 +210,12 @@ class Dropout(Layer):
 
     def call(self, inputs: DeviceArray, training=True):
         "Used during training to pass the parameters while getting the gradients"
-        return lax.select(training, self.dropout_op(self.params, inputs), inputs)
+        return lax.cond(training, lambda: self.dropout_op(self.params, inputs), lambda: inputs)
 
     def call_with_external_weights(
         self, params: Tuple, inputs: DeviceArray, training=True
     ):
-        return lax.select(training, self.dropout_op(self.params, inputs), inputs)
+        return lax.cond(training, lambda: self.dropout_op(self.params, inputs), lambda: inputs)
 
 
 class Activation(Layer):
@@ -311,7 +290,7 @@ class Squeeze(Layer):
 
     def build(self, input_shape: Tuple):
         self._input_shape = input_shape
-        self._shape = (*input_shape[: self.axis], *input_shape[self.axis + 1 :])
+        self._shape = (*input_shape[: self.axis], *input_shape[self.axis + 1:])
         self.built = True
 
     def squeeze_op(self, params, inputs):

@@ -1,6 +1,6 @@
-import time
-import sys
 import math
+import sys
+import time
 
 
 class ProgressBar:
@@ -16,25 +16,12 @@ class ProgressBar:
     def update(self, epoch, **kwargs):
         percent = math.ceil((epoch / self.total) * 100)
         self._done += self._size_per_percent
-        bar = "".join(
-            [
-                "=" * int(self._done),
-                ">",
-                "." * int(self.width - int(self._done) + self._size_per_percent - 1),
-            ]
+        bar = ("=" * int(self._done)) + ">" + ("." * int(self.width - int(self._done) + self._size_per_percent - 1))
+
+        bar = "\r{percent:.0f}% [{bar}] {epoch}/{total} ".format(
+            percent=percent, bar=bar, epoch=epoch, total=self.total
         )
-        # time_per_step = time.time()'
-        bar = "\r{epoch}/{total} [{bar}] {percent:.2f}% ".format(
-            epoch=epoch, total=self.total, bar=bar, percent=percent
-        )
-        bar = "".join(
-            [
-                bar,
-                ("{}: {:.5f} " * len(kwargs)).format(
-                    *(y for kv in kwargs.items() for y in kv)
-                ),
-            ]
-        )
+        bar += ("{}: {:.5f} " * len(kwargs)).format(*(y for kv in kwargs.items() for y in kv))
         self._print_message(bar)
         self._new_line = False
 

@@ -1,61 +1,13 @@
-import inspect
 from typing import Any, List, Tuple, Union
 
 from jax.interpreters.partial_eval import DynamicJaxprTracer
 from jax.numpy import DeviceArray
 from jax.random import PRNGKey
 from kerax import activations, backend
-from kerax.layers import layer_utils
 from kerax.engine.containers import NodeContainer, Weight
 from kerax.initializers import Initializer, initializers
+from kerax.layers import layer_utils
 from numpy import ndarray
-
-
-class CallFunctionUtil:
-    def __init__(self, func):
-        self._func_specs = inspect.getfullargspec(func)
-        self._arg_names = self._func_specs.args + (self._func_specs.kwonlyargs or [])
-        self._num_args = len(self._arg_names)
-        self._has_training_arg = "training" in self._arg_names
-        self._has_mask_arg = "mask" in self._arg_names
-        self._accept_kwargs = self._func_specs.varkw
-        self._requires_unpacking = None
-
-    def parse(self, *args, **kwargs):
-        inputs = []
-        extra_args = []
-        if args:
-            for arg in args:
-                if hasattr(arg, "shape"):
-                    inputs.append(arg)
-                else:
-                    extra_args.append(arg)
-        else:
-            for argname in self._arg_names:
-                current_input = kwargs.pop(argname, False)
-                if hasattr(current_input, "shape"):
-                    inputs.append(current_input)
-
-        if self._requires_unpacking is None:
-            if len(inputs) == 1:
-                self._requires_unpacking = False
-                inputs = inputs[0]
-            else:
-                self._requires_unpacking = True
-        else:
-            if not self._requires_unpacking:
-                inputs = inputs[0]
-
-        return inputs, extra_args, kwargs
-
-    def parse_v2(self, *args, **kwargs):
-        if args:
-            inputs = args[0]
-            args = args[1:]
-        else:
-            if self._arg_names[0] in kwargs:
-                inputs = kwargs.pop(self._arg_names[0])
-        return inputs, args, kwargs
 
 
 class Layer:
@@ -68,43 +20,34 @@ class Layer:
         **kwargs,
     ):
         self.name = backend.memoize(self.__class__.__name__ if name is None else name)
-        layer_utils._check_jit(self)
+        layer_utils.jit_layer_call(self)
 
         # Stores the layer params
         self._params = []
         self._node_container = NodeContainer()
-        self.seed = PRNGKey(layer_utils._check_seed(seed))
+        self.seed = PRNGKey(layer_utils.check_seed(seed))
         self.trainable = trainable
         self.dtype = dtype or backend.precision()
         self.built = False
         self._has_nested_layers = False
+        self._layers = []
         self._is_nested = False
-        self._validated = False
-        self._call_util = CallFunctionUtil(self.call)
-        self._validate_layer_options()
+        self._call_util = layer_utils.CallFunctionUtil(self.call)
+        layer_utils.validate_layer_options(self)
 
     def __setattr__(self, __name: str, __value: Any) -> None:
         if isinstance(__value, Layer):
             if not self._has_nested_layers:
                 self._has_nested_layers = True
-                self._nested_layers = [__value]
+                self._layers = [__value]
             else:
-                self._nested_layers.append(__value)
+                self._layers.append(__value)
             __value._is_nested = True
         return super().__setattr__(__name, __value)
 
-    def _validate_layer_options(self):
-        call_params = inspect.signature(self.call).parameters
-        self._required_number_inputs = len(call_params)
-
-        call_with_external_weights_params = inspect.signature(
-            self.call_with_external_weights
-        ).parameters
-        if "params" not in call_with_external_weights_params:
-            raise ValueError(
-                f"`params` argument should be added as the first argument in `call_with_external_weights` function."
-                f"Recieved: {call_with_external_weights_params.keys()}"
-            )
+    @property
+    def nested_layers(self):
+        return self._layers
 
     @property
     def shape(self):
@@ -209,7 +152,7 @@ class Layer:
                 )
 
     def __call__(self, *args, **kwargs):
-        inputs, args, kwargs = self._call_util.parse_v2(*args, **kwargs)
+        inputs, args, kwargs = self._call_util.parse_args(*args, **kwargs)
         if not self.built:
             if isinstance(inputs, Layer):
                 self.build(inputs.shape)

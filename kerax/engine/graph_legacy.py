@@ -1,7 +1,8 @@
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict, deque, namedtuple
 
 import jax.numpy as jnp
 from kerax.engine import generic_utils
+from kerax.layers import Input
 
 
 class Graph:

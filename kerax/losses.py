@@ -8,25 +8,19 @@ from kerax import backend
 
 
 class Reducer:
-    def __init__(self, reduction="auto"):
+    def __init__(self, reduction="mean"):
         self.reduction = reduction
-        if reduction == "mean" or reduction == "auto":
-            self.reduce = self.reduce_by_mean
+        if reduction == "mean":
+            self.reduce = jnp.mean
         elif reduction == "sum":
-            self.reduce = self.reduce_by_sum
+            self.reduce = jnp.sum
         elif reduction == "none" or reduction is None:
             self.reduce = lambda inputs: inputs
         else:
             raise ValueError(
-                f'`reduction` can be `"mean"`, `"sum"`, '
+                f'`reduction` can only be `"mean"`, `"sum"`, '
                 f'`"none"` or `None`. Recieved: {reduction}'
             )
-
-    def reduce_by_mean(self, inputs):
-        return jnp.mean(inputs)
-
-    def reduce_by_sum(self, inputs):
-        return jnp.sum(inputs)
 
     def __call__(self, inputs):
         return self.reduce(inputs)
@@ -69,7 +63,7 @@ class CategoricalCrossEntropy(Loss):
         else:
             return super().__new__(cls, *args, **kwargs)
 
-    def __init__(self, from_logits=False, reduction="auto", name=None):
+    def __init__(self, from_logits=False, reduction="mean", name=None):
         super(CategoricalCrossEntropy, self).__init__(reduction, name)
 
     def call(self, y_true, y_preds):
@@ -125,7 +119,7 @@ class BinaryCrossEntropy(Loss):
         else:
             return super().__new__(cls, *args, **kwargs)
 
-    def __init__(self, from_logits=False, reduction="auto", name=None):
+    def __init__(self, from_logits=False, reduction="mean", name=None):
         super(BinaryCrossEntropy, self).__init__(reduction, name)
 
     def call(self, y_true, y_preds):
