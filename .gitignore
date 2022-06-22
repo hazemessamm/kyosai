@@ -1,7 +1,7 @@
 __pycache__/
 .ipynb_checkpoints/
 mnist_dataset.csv
-kerax.egg-info/
+kyosai.egg-info/
 build/
 dist/
 *.csv

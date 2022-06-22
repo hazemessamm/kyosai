@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
-from kerax import __version__
+from kyosai import __version__
 
 setup(
-    name="kerax",
+    name="kyosai",
     version=__version__,
     description="Deep Learning library based on JAX and inspired from Keras",
     long_description="Simple Deep Learning library based on JAX and inspired from Keras, the main idea behind it to have the simplicity of Keras while using JAX",
@@ -15,5 +15,5 @@ setup(
         'jaxlib==0.3.2',
         'optax'
     ],
-    url='https://github.com/hazemessamm/kerax',
+    url='https://github.com/hazemessamm/kyosai',
 )

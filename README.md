@@ -1,4 +1,4 @@
-# Kerax
+# kyosai
 
 Deep Learning library based on JAX and inspired from Keras
 
@@ -16,10 +16,10 @@ Deep Learning library based on JAX and inspired from Keras
 > Example:
 
 ```python
-import kerax
-from kerax import layers
+import kyosai
+from kyosai import layers
 from jax import numpy as jnp
-from kerax.utils import to_categorical
+from kyosai.utils import to_categorical
 
 
 # You can define a Functional Model.
@@ -32,13 +32,13 @@ flatten = layers.Flatten()(maxpool3)
 dense1 = layers.Dense(128, activation='relu')(flatten)
 output = layers.Dense(10, activation='softmax')(dense1)
 
-model = kerax.Model(inputs, output)
+model = kyosai.Model(inputs, output)
 model.compile(loss='categorical_crossentropy', optimizer='adam')
 model.fit(x_train, y_train, epochs=40, batch_size=64)
 
 
 # Or you can define a Sequential Model
-model = kerax.Sequential([
+model = kyosai.Sequential([
   layers.Conv2D(64, 3, activation='relu', input_shape=(28, 28, 1)),
   layers.MaxPooling2D(2),
   layers.Conv2D(64, 3, activation='relu'),
