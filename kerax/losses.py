@@ -31,6 +31,8 @@ class Loss:
         self.reduction = Reducer(reduction)
         self.name = backend.memoize(self.__class__.__name__ if name is None else name)
         self.epsilon = 1e-7
+        if backend.is_jit_enabled():
+            self.call = jit(self.call)
 
     @property
     def __name__(self):

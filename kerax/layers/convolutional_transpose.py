@@ -1,8 +1,9 @@
-from kerax.layers.base_layer import Layer
-from typing import Tuple, Callable, Union
-from jax import random
+from typing import Callable, Tuple, Union
+
 from jax import lax
 from jax import numpy as jnp
+from jax import random
+from kerax.layers.base_layer import Layer
 
 
 class Conv1DTranspose(Layer):
