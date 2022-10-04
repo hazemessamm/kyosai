@@ -91,15 +91,6 @@ class Dense(Layer):
     def shape(self):
         return (None, self.units)
 
-    def compute_kernel_shape(self):
-        return self.kernel_weights.shape
-
-    def compute_bias_shape(self):
-        return self.bias_weights.shape
-
-    def compute_output_shape(self):
-        return (None, self.units)
-
     def build(self, input_shape: Tuple):
         self._input_shape = (input_shape[-1],)
         k1, k2 = random.split(self.seed)
@@ -154,10 +145,6 @@ class Flatten(Layer):
         super(Flatten, self).__init__(seed=0, trainable=False, **kwargs)
 
     @property
-    def compute_output_shape(self):
-        return (self.input_shape[0], reduce(op.mul, self.input_shape[1:], 1))
-
-    @property
     def shape(self):
         return (None, reduce(op.mul, self.input_shape[1:], 1))
 
@@ -177,6 +164,68 @@ class Flatten(Layer):
         return self.flatten_op(params, inputs)
 
 
+class GlobalAvgPooling1D(Layer):
+    """
+    GlobalAvgPooling1D Layer, (Layer subclass)
+    params:
+    None
+
+    """
+
+    def __init__(self, **kwargs):
+        super(GlobalAvgPooling1D, self).__init__(seed=0, trainable=False, **kwargs)
+
+    @property
+    def shape(self):
+        return (None, self._input_shape)
+
+    def build(self, input_shape: Tuple):
+        self._input_shape = input_shape[-1]
+        self.built = True
+
+    def global_avg_pooling_op(self, params: Tuple, inputs: DeviceArray):
+        return jax.numpy.mean(inputs, axis=1)
+
+    def call(self, inputs: DeviceArray, **kwargs):
+        "Used during training to pass the parameters while getting the gradients"
+        output = self.global_avg_pooling_op(self.params, inputs)
+        return output
+
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
+        return self.global_avg_pooling_op(params, inputs)
+
+
+class GlobalMaxPooling1D(Layer):
+    """
+    GlobalMaxPooling1D Layer, (Layer subclass)
+    params:
+    None
+
+    """
+
+    def __init__(self, **kwargs):
+        super(GlobalMaxPooling1D, self).__init__(seed=0, trainable=False, **kwargs)
+
+    @property
+    def shape(self):
+        return (None, self._input_shape)
+
+    def build(self, input_shape: Tuple):
+        self._input_shape = input_shape[-1]
+        self.built = True
+
+    def global_max_pooling_op(self, params: Tuple, inputs: DeviceArray):
+        return jax.numpy.max(inputs, axis=1)
+
+    def call(self, inputs: DeviceArray, **kwargs):
+        "Used during training to pass the parameters while getting the gradients"
+        output = self.global_max_pooling_op(self.params, inputs)
+        return output
+
+    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
+        return self.global_max_pooling_op(params, inputs)
+
+
 class Dropout(Layer):
     """
     Dropout Layer, (Layer subclass)
@@ -189,9 +238,6 @@ class Dropout(Layer):
     def __init__(self, rate: float, seed: int = None, name: str = None, **kwargs):
         super(Dropout, self).__init__(seed=seed, name=name, **kwargs)
         self.rate = rate
-
-    def compute_output_shape(self):
-        return self._input_shape
 
     @property
     def shape(self):
@@ -210,12 +256,16 @@ class Dropout(Layer):
 
     def call(self, inputs: DeviceArray, training=True):
         "Used during training to pass the parameters while getting the gradients"
-        return lax.cond(training, lambda: self.dropout_op(self.params, inputs), lambda: inputs)
+        return lax.cond(
+            training, lambda: self.dropout_op(self.params, inputs), lambda: inputs
+        )
 
     def call_with_external_weights(
         self, params: Tuple, inputs: DeviceArray, training=True
     ):
-        return lax.cond(training, lambda: self.dropout_op(self.params, inputs), lambda: inputs)
+        return lax.cond(
+            training, lambda: self.dropout_op(self.params, inputs), lambda: inputs
+        )
 
 
 class Activation(Layer):
@@ -233,10 +283,6 @@ class Activation(Layer):
     @property
     def identifier(self):
         return self._identifier
-
-    @property
-    def compute_output_shape(self):
-        return self._input_shape
 
     @property
     def shape(self):
@@ -290,7 +336,7 @@ class Squeeze(Layer):
 
     def build(self, input_shape: Tuple):
         self._input_shape = input_shape
-        self._shape = (*input_shape[: self.axis], *input_shape[self.axis + 1:])
+        self._shape = (*input_shape[: self.axis], *input_shape[self.axis + 1 :])
         self.built = True
 
     def squeeze_op(self, params, inputs):

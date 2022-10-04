@@ -15,9 +15,6 @@ class Merge(Layer):
     def shape(self):
         return self._output_shape
 
-    def compute_output_shape(self, input_shape):
-        return super().compute_output_shape(input_shape)
-
     @property
     def input_shape(self):
         return self._input_shape

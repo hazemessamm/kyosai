@@ -1,10 +1,23 @@
 from kyosai.layers.attention import MultiHeadAttention
-from kyosai.layers.convolutional import Conv1D, Conv2D
-from kyosai.layers.convolutional_transpose import (Conv1DTranspose,
-                                                  Conv2DTranspose)
-from kyosai.layers.core import (Activation, Dense, Dropout, Flatten, Input,
-                               Layer, Reshape, Squeeze)
+from kyosai.layers.convolutional import Conv1D
+from kyosai.layers.convolutional import Conv2D
+from kyosai.layers.convolutional_transpose import Conv1DTranspose
+from kyosai.layers.convolutional_transpose import Conv2DTranspose
+from kyosai.layers.core import Activation
+from kyosai.layers.core import Dense
+from kyosai.layers.core import Dropout
+from kyosai.layers.core import Flatten
+from kyosai.layers.core import Input
+from kyosai.layers.core import Layer
+from kyosai.layers.core import Reshape
+from kyosai.layers.core import Squeeze
+from kyosai.layers.core import GlobalAvgPooling1D
+from kyosai.layers.core import GlobalMaxPooling1D
 from kyosai.layers.embeddings import Embedding
-from kyosai.layers.merge import Add, Concatenate, Merge
-from kyosai.layers.pooling import (AveragePooling2D, MaxPooling1D, MaxPooling2D,
-                                  Pooling)
+from kyosai.layers.merge import Add
+from kyosai.layers.merge import Concatenate
+from kyosai.layers.merge import Merge
+from kyosai.layers.pooling import AveragePooling2D
+from kyosai.layers.pooling import MaxPooling1D
+from kyosai.layers.pooling import MaxPooling2D
+from kyosai.layers.pooling import Pooling

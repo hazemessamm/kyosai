@@ -1,3 +1,4 @@
+from functools import partial
 import inspect
 
 import numpy as np
@@ -23,10 +24,12 @@ def jit_layer_call(layer):
 
 
 def validate_layer_options(layer):
-    call_with_external_weights_params = inspect.getfullargspec(layer.call_with_external_weights).args
-    if call_with_external_weights_params[0] == 'self':
+    call_with_external_weights_params = inspect.getfullargspec(
+        layer.call_with_external_weights
+    ).args
+    if call_with_external_weights_params[0] == "self":
         call_with_external_weights_params = call_with_external_weights_params[1:]
-    if call_with_external_weights_params[0] != 'params':
+    if call_with_external_weights_params[0] != "params":
         raise ValueError(
             f"`params` argument should be added as the first argument in `call_with_external_weights` function."
             f"Recieved: {call_with_external_weights_params}"
@@ -42,6 +45,10 @@ class CallFunctionUtil:
         self._has_mask_arg = "mask" in self._arg_names
         self._accept_kwargs = self._func_specs.varkw
         self._requires_unpacking = None
+
+    # TOOD: try to enhance the `parse` method.
+    def parse_experimental(self, *args, **kwargs):
+        pass
 
     def parse(self, *args, **kwargs):
         inputs = []
@@ -77,4 +84,6 @@ class CallFunctionUtil:
         else:
             if self._arg_names[0] in kwargs:
                 inputs = kwargs.pop(self._arg_names[0])
+        if len(args) > 1:
+            self._requires_unpacking = True
         return inputs, args, kwargs

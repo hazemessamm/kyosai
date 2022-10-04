@@ -34,33 +34,51 @@ class MultiHeadAttention(Layer):
         num_heads,
         activation="relu",
         use_bias=True,
-        key=None,
+        seed=None,
         trainable=True,
         dtype="float32",
         name=None,
     ):
-        if embedding_dim % num_heads != 0:
-            raise Exception("embedding_dim is not divisible by num_heads")
 
         super(MultiHeadAttention, self).__init__(
-            key=key, trainable=trainable, dtype=dtype, name=name
+            seed=seed, trainable=trainable, dtype=dtype, name=name
         )
+
+        if embedding_dim % num_heads != 0:
+            raise ValueError("embedding_dim is not divisible by num_heads")
+
         self.embedding_dim = embedding_dim
         self.num_heads = num_heads
         self.use_bias = use_bias
         self.activation = activation
 
         self.q_dense = Dense(
-            embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable
+            embedding_dim,
+            activation=activation,
+            use_bias=use_bias,
+            trainable=trainable,
+            seed=seed,
         )
         self.k_dense = Dense(
-            embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable
+            embedding_dim,
+            activation=activation,
+            use_bias=use_bias,
+            trainable=trainable,
+            seed=seed,
         )
         self.v_dense = Dense(
-            embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable
+            embedding_dim,
+            activation=activation,
+            use_bias=use_bias,
+            trainable=trainable,
+            seed=seed,
         )
         self.o_dense = Dense(
-            embedding_dim, activation=activation, use_bias=use_bias, trainable=trainable
+            embedding_dim,
+            activation=activation,
+            use_bias=use_bias,
+            trainable=trainable,
+            seed=seed,
         )
 
     # TODO
@@ -78,8 +96,14 @@ class MultiHeadAttention(Layer):
         attention = jnp.matmul(attention, value)
         return attention
 
-    def build(self, input_shape):
-        query_dim, key_dim, value_dim = input_shape
+    def build(self, query_shape, value_shape, key_shape=None):
+        query_dim, value_dim = query_shape, value_shape
+
+        if key_shape is None:
+            key_dim = value_dim
+        else:
+            key_dim = key_shape
+
         self.q_dense.build(query_dim)
         self.k_dense.build(key_dim)
         self.v_dense.build(value_dim)

@@ -31,6 +31,7 @@ def conv2d(inputs, weights, strides, padding, dimension_numbers, bias=None):
         output = jnp.add(output, bias)
     return output
 
+
 # TODO:
 def lstm(inputs, lstm_state, weights):
     cell, hidden = lstm_state
@@ -50,6 +51,7 @@ def lstm(inputs, lstm_state, weights):
     new_hidden_state = output_gate_out * input_mul_cell_tanh
 
     return new_hidden_state, new_context
+
 
 # TODO:
 def gru(inputs, gru_state, weights):

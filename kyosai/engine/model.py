@@ -1,3 +1,4 @@
+import inspect
 from kyosai import backend, losses, optimizers
 from kyosai.engine import data_adapter
 from kyosai.engine.utils import ProgressBar
@@ -56,6 +57,12 @@ class _Model(base_layer.Layer):
                             metric
                         )
 
+    def simulate_call(self):
+        if not self.built:
+            args = inspect.getfullargspec(self.call).args[1:]
+            dummy_inputs = [base_layer.DummyInput() for i in range(len(args))]
+            self(*dummy_inputs)
+
     def compile(self, loss, optimizer, metrics=None):
         self.loss = losses.get(loss)
         self.optimizer = optimizers.get(optimizer)
@@ -66,9 +73,14 @@ class _Model(base_layer.Layer):
         if isinstance(self.optimizer, type):
             self.optimizer = self.optimizer()
 
-        self.optimizer.initialize(self.params)
+        self.simulate_call()
+        self.optimizer._initialize(self.params)
         self._get_metrics(metrics)
         self._compiled = True
+
+    # TODO: implement `build()` method
+    def build(self, input_shape):
+        pass
 
     def get_weights(self):
         return self._params
@@ -85,35 +97,36 @@ class _Model(base_layer.Layer):
         self._params = updated_weights
 
     def predict(self, inputs, **kwargs):
-        kwargs.pop('training', None)
+        kwargs.pop("training", None)
         return self.call(inputs, training=False, **kwargs)
 
     def predict_with_external_weights(self, params, inputs, **kwargs):
-        kwargs.pop('training', None)
+        kwargs.pop("training", None)
         return self.call_with_external_weights(params, inputs, training=False, **kwargs)
 
-    def __call__(self, inputs, **kwargs):
-        raise NotImplementedError('__call__ should be implemented in a subclass.')
+    def call(self, inputs, **kwargs):
+        raise NotImplementedError("`call` should be implemented in a subclass.")
 
     def call_with_external_weights(self, params, inputs, **kwargs):
-        raise NotImplementedError('call_with_external_weights should be implemented in a subclass.')
+        raise NotImplementedError(
+            "`call_with_external_weights` should be implemented in a subclass."
+        )
 
     def train_step(self, x, y):
         "Returns loss value and takes training batch"
         loss, predictions, gradients = backend.get_model_gradients(
-            model=self, loss=self.loss, return_loss=True, return_predictions=True
+            model=self, loss=self.loss
         )(x, y)
         params = self.optimizer.minimize(self.params, gradients)
         self.update_weights(params)
-        self.metrics_values.update({"Loss": loss})
-        return predictions
+        return {"Loss": loss}
 
     def test_step(self, validation_dataset):
         avg_valid_loss = 0
         for _ in range(validation_dataset.num_batches):
             batch_x, batch_y = validation_dataset.get_batch()
             avg_valid_loss += self.loss(batch_x, batch_y)
-        self.metrics_values.update({"Validation loss": avg_valid_loss})
+        return {"Validation loss": avg_valid_loss}
 
     def _test_step(self, validation_dataset):
         if validation_dataset is None:
@@ -146,12 +159,15 @@ class _Model(base_layer.Layer):
             validation_dataset = None
 
         progbar = ProgressBar(len(dataset))
-
+        # TODO: should add support for logging metrics
+        losses = {}
         for epoch in range(1, epochs + 1):
             self.metrics_values.clear()
-            for epoch in range(len(dataset)):
+            for step in range(1, len(dataset) + 1):
                 batch_x, batch_y = dataset.get_batch()
-                predictions = self.train_step(batch_x, batch_y)
-                self._test_step(validation_dataset)
-                progbar.update(epoch, **self.metrics_values)
+                training_losses = self.train_step(batch_x, batch_y)
+                validation_losses = self._test_step(validation_dataset)
+                losses.update(training_losses)
+                losses.update(validation_losses)
+                progbar.update(epoch, step, **losses)
             progbar.reset()

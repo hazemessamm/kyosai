@@ -32,7 +32,7 @@ class TensorLikeDataAdapter(DataAdapter):
         self.epochs = epochs
         self.steps = steps
         self.shuffle = shuffle
-        self.training_index = 0
+        self.current_index = 0
         self.resetted = False
         self.num_batches = self.num_samples // batch_size
 
@@ -61,21 +61,21 @@ class TensorLikeDataAdapter(DataAdapter):
         return current_batch_x, current_batch_y
 
     def get_without_shuffle(self):
-        current_batch_index = self.training_index * self._batch_size
+        current_batch_index = self.current_index * self._batch_size
         status = self.check_index_range(
             current_batch_index + self._batch_size, self.num_samples
         )
         if status:
-            self.training_index = 0
+            self.current_index = 0
             current_batch_index = 0
             self.resetted = True
         else:
             self.resetted = False
         current_batch_x = self.x[
-            current_batch_index: current_batch_index + self._batch_size
+            current_batch_index : current_batch_index + self._batch_size
         ]
         current_batch_y = self.y[
-            current_batch_index: current_batch_index + self._batch_size
+            current_batch_index : current_batch_index + self._batch_size
         ]
-        self.training_index += 1
+        self.current_index += 1
         return current_batch_x, current_batch_y

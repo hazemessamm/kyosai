@@ -67,6 +67,7 @@ class GraphV3(_Model):
             self._layers_mapping[layer.name] = layer
             self._params.append(layer.params)
             self._layers = layers
+            self.built = True
 
     def call_with_external_weights(self, params, inputs, **kwargs):
         if not isinstance(inputs, list):
@@ -87,6 +88,9 @@ class GraphV3(_Model):
                     param, incoming_inputs, **kwargs
                 )
         return op.itemgetter(*self._output_names)(outputs)
+
+    def call(self, inputs):
+        pass
 
     def __call__(self, inputs, **kwargs):
         return self.call_with_external_weights(self.params, inputs, **kwargs)

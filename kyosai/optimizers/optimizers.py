@@ -14,21 +14,20 @@ class Optimizer:
         - learning_rate: stores the learning rate (step_size), default: 0.0001
     """
 
-    def __init__(self, learning_rate=0.0001):
+    def __init__(self, learning_rate=0.001):
         self.learning_rate = learning_rate
         self.step_index = 0
         self._initialized = False
         self._apply_updates = jit(optax.apply_updates)
 
-    def initialize(self, params):
+    def _initialize(self, params):
         self._optimizer_state = self._optimizer.init(params)
         self._initialized = True
 
     def minimize(self, params, grads):
         "Updates the model params"
         if not self._initialized:
-            self._optimizer_state = self._optimizer.init(params)
-            self._initialized = True
+            self._initialize(params)
         # returns new optimizer state by calling the update function
         updates, self._optimizer_state = self._optimizer_update(
             grads, self._optimizer_state
@@ -46,7 +45,7 @@ class SGD(Optimizer):
         - learning_rate: stores the learning rate (step_size), default: 0.0001
     """
 
-    def __init__(self, learning_rate=0.0001, momentum=None, nesterov=False):
+    def __init__(self, learning_rate=0.001, momentum=None, nesterov=False):
         super(SGD, self).__init__(learning_rate=learning_rate)
         """
         Initializes the Stochastic Gradient Descent
@@ -75,7 +74,7 @@ class Adam(Optimizer):
         - epsilon: a positive scalar value for epsilon, a small constant for numerical stability
     """
 
-    def __init__(self, learning_rate=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08):
+    def __init__(self, learning_rate=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08):
         super(Adam, self).__init__(learning_rate=learning_rate)
         self._beta_1 = beta_1
         self._beta_2 = beta_2

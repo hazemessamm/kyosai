@@ -8,16 +8,29 @@ from kyosai.engine.containers import NodeContainer, Weight
 from kyosai.initializers import Initializer, initializers
 from kyosai.layers import layer_utils
 from numpy import ndarray
+import abc
+import inspect
+import copy
 
 
-class Layer:
+class DummyInput:
+    def __init__(self):
+        self.current_shape = None
+        self.from_layer = None
+        self.first_call = True
+
+    @property
+    def shape(self):
+        return self.current_shape
+
+
+class Layer(abc.ABC):
     def __init__(
         self,
         seed: int = None,
         trainable: bool = True,
         dtype: str = "float32",
         name: str = None,
-        **kwargs,
     ):
         self.name = backend.memoize(self.__class__.__name__ if name is None else name)
         layer_utils.jit_layer_call(self)
@@ -58,7 +71,9 @@ class Layer:
         return self._node_container.inbound_nodes
 
     def compute_output_shape(self, input_shape: Union[List, Tuple]):
-        raise NotImplementedError("should be implemented in a subclass.")
+        raise NotImplementedError(
+            f"Error in layer {self}. Should be implemented in a subclass."
+        )
 
     @property
     def input_shape(self):
@@ -74,10 +89,13 @@ class Layer:
     @property
     def params(self):
         if not self.built:
-            raise Exception("Layer is not built yet. use `build()` method.")
+            raise Exception(
+                f"Error in layer {self}. Layer is not built yet. use `build()` method."
+            )
+
         params = [param.get_weights() for param in self._params]
         if self._has_nested_layers:
-            nested_params = tuple(layer.params for layer in self._nested_layers)
+            nested_params = tuple(layer.params for layer in self._layers)
             params.extend(nested_params)
         return tuple(params)
 
@@ -86,7 +104,9 @@ class Layer:
         return {param.name: param.get_weights() for param in self._params}
 
     def build(self, input_shape: Tuple):
-        return NotImplementedError("Should be implemented in a subclass")
+        raise NotImplementedError(
+            f"Error in layer {self}. Should be implemented in a subclass."
+        )
 
     def get_initializer(self, identifier: Union[str, Initializer]):
         "Returns the specified initializer"
@@ -96,9 +116,32 @@ class Layer:
         "Returns the specified activation"
         return activations.get(identifier)
 
-    def connect(self, layer):
+    def connect(self, layer, *args, **kwargs):
         "Connects the current layer with the previous layer"
+
+        if isinstance(layer, DummyInput):
+            layer = layer.from_layer
         self._node_container.connect_nodes(self, layer)
+
+        for arg in args:
+            if isinstance(arg, Layer):
+                self._node_container.connect_nodes(self, arg)
+            elif isinstance(arg, DummyInput):
+                self._node_container.connect_nodes(self, arg.from_layer)
+            else:
+                raise ValueError(
+                    f"Error in layer {self}. `{arg}` is not a subclass of a layer. Recieved type={type(arg)}"
+                )
+
+        for k, v in kwargs.items():
+            if isinstance(v, Layer):
+                self._node_container.connect_nodes(self, v)
+            elif isinstance(arg, DummyInput):
+                self._node_container.connect_nodes(self, arg.from_layer)
+            else:
+                raise ValueError(
+                    f"Error in layer {self}. `{k}` is not a subclass of a layer. Recieved type={type(v)}"
+                )
 
     def add_weight(
         self,
@@ -119,7 +162,7 @@ class Layer:
     def set_weights(self, new_weights: Tuple):
         if len(new_weights) > 0:
             if self._has_nested_layers:
-                for layer in self._nested_layers:
+                for layer in self._layers:
                     for w1, w2 in zip(layer._params, new_weights):
                         w1.set_weights(w2)
             else:
@@ -132,7 +175,7 @@ class Layer:
                 w_old.update_weights(w_new)
 
             if self._has_nested_layers:
-                for layer, new_weight in zip(self._nested_layers, new_weights):
+                for layer, new_weight in zip(self._layers, new_weights):
                     for w_old, w_new in zip(layer._params, new_weight):
                         w_old.update_weights(w_new)
 
@@ -141,54 +184,131 @@ class Layer:
             for layer in layers:
                 if self.input_shape != layer.shape:
                     raise ValueError(
+                        f"Error in layer {self}"
                         f"This input shape of layer {self.name} does not match the output shape of layer {layer.name}."
                         f"Expected: {self.input_shape}. Recieved: {layer.shape}"
                     )
         else:
             if self.input_shape != layers.shape:
                 raise ValueError(
+                    f"Error in layer {self}"
                     f"This input shape of layer {self.name} does not match the output shape of layer {layers.name}."
                     f"Expected: {self.input_shape}. Recieved: {layers.shape}"
                 )
 
+    def parse_for_build(self, inputs, *args, **kwargs):
+        fn_args = inspect.getfullargspec(self.build).args
+        if isinstance(inputs, list):
+            input_shape = [getattr(i, "shape", None) for i in inputs]
+        else:
+            input_shape = inputs.shape
+
+        if (
+            not isinstance(input_shape, list) and not getattr(inputs, "shape", None)
+        ) or (isinstance(input_shape, list) and not all(input_shape)):
+            raise Exception(
+                f"Error in layer {self}. `inputs` does not have `shape` attribute."
+            )
+        arg_shapes = []
+        for arg, fn_arg in zip(args, fn_args):
+            if not getattr(arg, "shape", None):
+                raise Exception(
+                    f"Error in layer {self}. `{fn_arg}` does not have `shape` attribute."
+                )
+            arg_shapes.append(arg.shape)
+
+        kwarg_shapes = {}
+        for k, w in kwargs.items():
+            if getattr(w, "shape", None):
+                raise Exception(
+                    f"Error in layer {self}. `{k}` does not have `shape` attribute."
+                )
+            kwarg_shapes[k] = w.shape
+
+        return input_shape, arg_shapes, kwarg_shapes
+
+    def dummy_call(self, inputs, *args, **kwargs):
+        if inputs.first_call:
+            inputs.first_call = False
+            out = self.call(inputs, *args, **kwargs)
+            return out
+        else:
+            if inputs.from_layer is not None:
+                inputs_shape, args_shape, kwargs_shape = self.parse_for_build(
+                    inputs, *args, **kwargs
+                )
+                self.build(inputs_shape, *args_shape, **kwargs_shape)
+                self.connect(inputs.from_layer, *args, **kwargs)
+            inputs.current_shape = self.shape
+            inputs.from_layer = self
+            return copy.deepcopy(inputs)
+
+    def build_for_layer(self, inputs, *args, **kwargs):
+        # temporary and will be removed or modified
+        inputs_shape, args_shape, kwargs_shape = self.parse_for_build(
+            inputs, *args, **kwargs
+        )
+        self.build(inputs_shape, *args_shape, **kwargs_shape)
+        self.connect(inputs, *args, **kwargs)
+        return self
+
+    def build_for_tensors(self, inputs, *args, **kwargs):
+        # temporary and will be removed or modified
+        inputs_shape, args_shape, kwargs_shape = self.parse_for_build(
+            inputs, *args, **kwargs
+        )
+        self.build(inputs_shape, *args_shape, **kwargs_shape)
+        output = self.call(inputs, *args, **kwargs)
+        return output
+
+    def build_for_list(self, inputs, *args, **kwargs):
+        # temporary and will be removed or modified
+        inputs_shape, args_shape, kwargs_shape = self.parse_for_build(
+            inputs, *args, **kwargs
+        )
+        self.build(inputs_shape, *args_shape, **kwargs_shape)
+
     def __call__(self, *args, **kwargs):
         inputs, args, kwargs = self._call_util.parse_args(*args, **kwargs)
+        if isinstance(inputs, DummyInput):
+            return self.dummy_call(inputs, *args, **kwargs)
+
         if not self.built:
-            if isinstance(inputs, Layer):
-                self.build(inputs.shape)
-                self.connect(inputs)
-                return self
+            if isinstance(inputs, (Layer)):
+                return self.build_for_layer(inputs, *args, **kwargs)
             elif isinstance(inputs, (ndarray, DeviceArray, DynamicJaxprTracer)):
-                self.build(inputs.shape)
-                return self.call(inputs, *args, **kwargs)
+                return self.build_for_tensors(inputs, *args, **kwargs)
             elif isinstance(inputs, (list, tuple)):
-                shapes = [i.shape for i in inputs]
-                self.build(shapes)
+                self.build_for_list(inputs, *args, **kwargs)
                 if all([isinstance(i, Layer) for i in inputs]):
-                    self.connect(inputs)
+                    self.connect(inputs, *args, **kwargs)
                     return self
                 else:
                     return self.call(inputs, *args, **kwargs)
             else:
                 raise ValueError(
+                    f"Error in layer {self}. "
                     f"`inputs` should be with type `Layer`, `ndarray`, `DeviceArray`, `list` or `tuple`."
                     f"Recieved: {type(inputs)}"
                 )
         else:
             if isinstance(inputs, Layer):
                 self.check_shape_if_built(inputs)
-                self.connect(inputs)
+                self.connect(inputs, *args, **kwargs)
                 return self
             else:
                 return self.call(inputs, *args, **kwargs)
 
+    @abc.abstractmethod
     def call(self, inputs: DeviceArray, **kwargs):
         raise NotImplementedError(
             "This method should be implemented in Layer subclasses"
         )
 
+    @abc.abstractmethod
     def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
         raise NotImplementedError(
+            f"Error in layer {self}"
             "This method should be implemented in Layer subclasses"
         )
 

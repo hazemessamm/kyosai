@@ -1,11 +1,10 @@
 from typing import Callable, Tuple, Union
 
-import jax
 from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax.numpy import DeviceArray
-from kyosai.layers.base_layer import Layer
+from kyosai.layers.base_layer import DummyInput, Layer
 
 
 class Conv1D(Layer):
@@ -65,21 +64,7 @@ class Conv1D(Layer):
             self.build(shape)
 
     @property
-    def kernel_shape(self):
-        "Returns the kernel dimensions"
-        return self.kernel_weights.shape
-
-    @property
-    def bias_shape(self):
-        "Returns the bias dimensions"
-        if self.use_bias:
-            return self.bias_weights.shape
-        else:
-            raise Exception(
-                "Bias is turned OFF, set use_bias=True in the constructor to use it"
-            )
-
-    def compute_output_shape(self):
+    def shape(self):
         if self.built:
             return lax.conv_general_shape_tuple(
                 lhs_shape=self.input_shape,
@@ -92,10 +77,6 @@ class Conv1D(Layer):
             raise Exception(
                 f"{self.name} is not built yet, use call() or build() to build it."
             )
-
-    @property
-    def shape(self):
-        return self.compute_output_shape()
 
     def compute_kernel_shape(self, input_shape: Tuple):
         return (*self.kernel_size, input_shape[-1], self.filters)
@@ -112,7 +93,7 @@ class Conv1D(Layer):
 
         if self.padding == "causal":
             raise ValueError(
-                f"`causal` padding is only allowed in `Conv1D` layer. Recieved padding={self.padding}"
+                f"`causal` padding is not implemented in `Conv1D` layer yet. Recieved padding={self.padding}"
             )
 
     def build(self, input_shape: Tuple):
@@ -162,6 +143,8 @@ class Conv1D(Layer):
         return output
 
     def call(self, inputs: DeviceArray, **kwargs):
+        if isinstance(inputs, DummyInput):
+            return inputs
         return self.convolution_op(self.params, inputs)
 
     def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
@@ -225,21 +208,7 @@ class Conv2D(Layer):
             self.build(shape)
 
     @property
-    def kernel_shape(self):
-        "Returns the kernel dimensions"
-        return self.kernel_weights.shape
-
-    @property
-    def bias_shape(self):
-        "Returns the bias dimensions"
-        if self.use_bias:
-            return self.bias_weights.shape
-        else:
-            raise Exception(
-                "Bias is turned OFF, set use_bias=True in the constructor to use it"
-            )
-
-    def compute_output_shape(self):
+    def shape(self):
         if self.built:
             return lax.conv_general_shape_tuple(
                 lhs_shape=self.input_shape,
@@ -252,10 +221,6 @@ class Conv2D(Layer):
             raise Exception(
                 f"{self.name} is not built yet, use call() or build() to build it."
             )
-
-    @property
-    def shape(self):
-        return self.compute_output_shape()
 
     def compute_kernel_shape(self, input_shape: Tuple):
         return (*self.kernel_size, input_shape[-1], self.filters)
