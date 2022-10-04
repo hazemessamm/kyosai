@@ -143,8 +143,6 @@ class Conv1D(Layer):
         return output
 
     def call(self, inputs: DeviceArray, **kwargs):
-        if isinstance(inputs, DummyInput):
-            return inputs
         return self.convolution_op(self.params, inputs)
 
     def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
