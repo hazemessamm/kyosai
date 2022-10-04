@@ -1,8 +1,18 @@
+from functools import partial
 import inspect
+from typing import NamedTuple
 from kyosai import backend, losses, optimizers
 from kyosai.engine import data_adapter
 from kyosai.engine.utils import ProgressBar
 from kyosai.layers import base_layer
+import jax
+
+
+class BackwardOutput(NamedTuple):
+    predictions: jax.numpy.DeviceArray
+    loss: jax.numpy.DeviceArray
+    gradients: tuple
+
 
 
 class _Model(base_layer.Layer):
@@ -42,21 +52,6 @@ class _Model(base_layer.Layer):
     def compiled(self):
         return self._compiled
 
-    def _get_metrics(self, metrics):
-        if metrics is not None:
-            if not isinstance(metrics, list):
-                raise ValueError(
-                    f"metrics should be inside a list. Recieved: {metrics}"
-                )
-            else:
-                for metric in metrics:
-                    if isinstance(metric, str):
-                        self.metrics_instances[metric] = metrics.get(metric)()
-                    else:
-                        self.metrics_instances[metric.__class__.__name__] = metrics.get(
-                            metric
-                        )
-
     def simulate_call(self):
         if not self.built:
             args = inspect.getfullargspec(self.call).args[1:]
@@ -64,18 +59,17 @@ class _Model(base_layer.Layer):
             self(*dummy_inputs)
 
     def compile(self, loss, optimizer, metrics=None):
-        self.loss = losses.get(loss)
-        self.optimizer = optimizers.get(optimizer)
+        self.compiled_loss = losses.get(loss)
+        self.compiled_optimizer = optimizers.get(optimizer)
 
-        if isinstance(self.loss, type):
-            self.loss = self.loss()
+        if isinstance(self.compiled_loss, type):
+            self.compiled_loss = self.compiled_loss()
 
-        if isinstance(self.optimizer, type):
-            self.optimizer = self.optimizer()
+        if isinstance(self.compiled_optimizer, type):
+            self.compiled_optimizer = self.compiled_optimizer()
 
         self.simulate_call()
-        self.optimizer._initialize(self.params)
-        self._get_metrics(metrics)
+        self.compiled_optimizer._initialize(self.params)
         self._compiled = True
 
     # TODO: implement `build()` method
@@ -114,12 +108,22 @@ class _Model(base_layer.Layer):
 
     def train_step(self, x, y):
         "Returns loss value and takes training batch"
-        loss, predictions, gradients = backend.get_model_gradients(
-            model=self, loss=self.loss
-        )(x, y)
-        params = self.optimizer.minimize(self.params, gradients)
+        backward_output = self.compute_gradients(x, y)
+        params = self.compiled_optimizer.minimize(self.params, backward_output.gradients)
         self.update_weights(params)
-        return {"Loss": loss}
+        return {"Loss": backward_output.loss}
+
+    def _compute_loss(self, y, y_pred):
+        return self.compiled_loss(y, y_pred)
+
+    def compute_gradients(self, x, y) -> BackwardOutput:
+        def grad_fn(params, x, y):
+            preds = self.call_with_external_weights(params, x)
+            loss_val = self._compute_loss(y, preds)
+            return (loss_val, preds)
+        
+        (loss, predictions), grads = jax.value_and_grad(grad_fn, argnums=0, has_aux=True)(self.params, x, y)
+        return BackwardOutput(predictions=predictions, loss=loss, gradients=grads)
 
     def test_step(self, validation_dataset):
         avg_valid_loss = 0
@@ -134,6 +138,10 @@ class _Model(base_layer.Layer):
         else:
             return self.test_step(validation_dataset)
 
+    def _assert_compiled(self):
+        if not self.compiled:
+            raise Exception("Model is not compiled, use `compile()` method")
+
     def fit(
         self,
         x,
@@ -144,9 +152,8 @@ class _Model(base_layer.Layer):
         shuffle=True,
         validation_data=None,
     ):
-        if not self.compiled:
-            raise Exception("Model is not compiled, use compile() method")
 
+        self._assert_compiled()
         dataset = data_adapter.TensorLikeDataAdapter(
             x, y, batch_size=batch_size, epochs=epochs, steps=steps, shuffle=shuffle
         )
