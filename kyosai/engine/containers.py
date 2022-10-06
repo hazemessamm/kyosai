@@ -63,3 +63,7 @@ class NodeContainer:
         else:
             current_node._node_container.inbound_nodes.append(connected_node)
             connected_node._node_container.outbound_nodes.append(current_node)
+
+
+class MetricsContainer:
+    pass

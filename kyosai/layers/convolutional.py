@@ -4,7 +4,7 @@ from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax.numpy import DeviceArray
-from kyosai.layers.base_layer import DummyInput, Layer
+from kyosai.layers.base_layer import Layer
 
 
 class Conv1D(Layer):

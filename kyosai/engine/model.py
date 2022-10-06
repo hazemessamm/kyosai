@@ -1,21 +1,82 @@
-from functools import partial
 import inspect
 from typing import NamedTuple
 from kyosai import backend, losses, optimizers
-from kyosai.engine import data_adapter
+from kyosai.engine import data_adapter, graph_recorder
 from kyosai.engine.utils import ProgressBar
-from kyosai.layers import base_layer
+from kyosai.layers.base_layer import Layer
 import jax
+from collections import OrderedDict
+from typing import Dict
+from kyosai.engine import generic_utils
+import operator as op
 
 
-class BackwardOutput(NamedTuple):
+class FullPassOutput(NamedTuple):
     predictions: jax.numpy.DeviceArray
     loss: jax.numpy.DeviceArray
     gradients: tuple
 
+# Not efficient approach, will be removed or modified
+class InnerGraph:
+    def __init__(self, inputs, outputs):
+        self.inputs, self.outputs = generic_utils.flatten(inputs), generic_utils.flatten(outputs)
+        self._layers_mapping: Dict[str, Layer] = OrderedDict()
+        self._dependencies = OrderedDict()
+        self._output_names = [output.name for output in self.outputs]
+        self._create_graph()
+        generic_utils.jit_call(self)
+
+    @property
+    def output(self):
+        return self.outputs[0] if len(self.outputs) == 1 else []
+
+    @property
+    def params(self):
+        return self._params
+
+    def _create_graph(self):
+        layers = jax.util.toposort(self.outputs)
+
+        num_inputs = 0
+        for layer in layers:
+            if len(layer.parents) == 0:
+                parents = [f"arg:{num_inputs}"]
+                num_inputs += 1
+            else:
+                parents = [parent_layer.name for parent_layer in layer.parents]
+            self._dependencies[layer.name] = parents
+            self._layers_mapping[layer.name] = layer
+            self._layers = layers
+            self.built = True
+
+    def call_with_external_weights(self, params, inputs, **kwargs):
+        if not isinstance(inputs, list):
+            inputs = [inputs]
+        outputs = {f"arg:{i}": inputs[i] for i in range(len(inputs))}
+
+        for param, (layer, parent_layers) in zip(params, self._dependencies.items()):
+            incoming_inputs = op.itemgetter(*parent_layers)(outputs)
+            if (
+                isinstance(incoming_inputs, tuple)
+                and self._layers_mapping[layer]._call_util._requires_unpacking
+            ):
+                outputs[layer] = self._layers_mapping[layer].call_with_external_weights(
+                    param, *incoming_inputs, **kwargs
+                )
+            else:
+                outputs[layer] = self._layers_mapping[layer].call_with_external_weights(
+                    param, incoming_inputs, **kwargs
+                )
+        return op.itemgetter(*self._output_names)(outputs)
+
+    def call(self, inputs, **kwargs):
+        self.call_with_external_weights(self.params, inputs, **kwargs)
+
+    def __call__(self, inputs, **kwargs):
+        return self.call_with_external_weights(self.params, inputs, **kwargs)
 
 
-class _Model(base_layer.Layer):
+class _Model(Layer):
     def __init__(self, name=None, trainable=False, sequential=False):
         super(_Model, self).__init__(name=name)
         self.name = backend.memoize(self.__class__.__name__ if name is None else name)
@@ -26,6 +87,7 @@ class _Model(base_layer.Layer):
         self._params = []
         self.history = {}
         self.metrics_values = {}
+        self.is_subclass = False
 
     @property
     def __name__(self):
@@ -52,13 +114,21 @@ class _Model(base_layer.Layer):
     def compiled(self):
         return self._compiled
 
-    def simulate_call(self):
+    def _record_graph(self):
         if not self.built:
             args = inspect.getfullargspec(self.call).args[1:]
-            dummy_inputs = [base_layer.DummyInput() for i in range(len(args))]
+            dummy_inputs = [graph_recorder.GraphRecorder() for i in range(len(args))]
             self(*dummy_inputs)
+            self.is_subclass = True
+
+            inputs = [di.input_layers for di in dummy_inputs]
+            # Converting to list because it was a set
+            outputs = [list(di.output_layers) for di in dummy_inputs]
+            self.inner_graph = InnerGraph(inputs=inputs, outputs=outputs)
 
     def compile(self, loss, optimizer, metrics=None):
+        self._record_graph()
+
         self.compiled_loss = losses.get(loss)
         self.compiled_optimizer = optimizers.get(optimizer)
 
@@ -68,7 +138,6 @@ class _Model(base_layer.Layer):
         if isinstance(self.compiled_optimizer, type):
             self.compiled_optimizer = self.compiled_optimizer()
 
-        self.simulate_call()
         self.compiled_optimizer._initialize(self.params)
         self._compiled = True
 
@@ -108,22 +177,31 @@ class _Model(base_layer.Layer):
 
     def train_step(self, x, y):
         "Returns loss value and takes training batch"
-        backward_output = self.compute_gradients(x, y)
-        params = self.compiled_optimizer.minimize(self.params, backward_output.gradients)
-        self.update_weights(params)
-        return {"Loss": backward_output.loss}
+        forward_backward_output = self.compute_forward_and_backward_pass(x, y)
+        self.minimize(self.params, forward_backward_output.gradients)
+        return {"Loss": forward_backward_output.loss}
 
     def _compute_loss(self, y, y_pred):
         return self.compiled_loss(y, y_pred)
 
-    def compute_gradients(self, x, y) -> BackwardOutput:
-        def grad_fn(params, x, y):
-            preds = self.call_with_external_weights(params, x)
-            loss_val = self._compute_loss(y, preds)
-            return (loss_val, preds)
+    def minimize(self, params, gradients):
+        new_params = self.compiled_optimizer.minimize(params, gradients)
+        self.update_weights(new_params)
+
+    def compute_forward_and_backward_pass(self, x, y) -> FullPassOutput:
+        if not self.is_subclass:
+            def grad_fn(params, x, y):
+                preds = self.call_with_external_weights(params, x)
+                loss_val = self._compute_loss(y, preds)
+                return (loss_val, preds)
+        else:
+            def grad_fn(params, x, y):
+                preds = self.inner_graph.call_with_external_weights(params, x)
+                loss_val = self._compute_loss(y, preds)
+                return (loss_val, preds)
         
         (loss, predictions), grads = jax.value_and_grad(grad_fn, argnums=0, has_aux=True)(self.params, x, y)
-        return BackwardOutput(predictions=predictions, loss=loss, gradients=grads)
+        return FullPassOutput(predictions=predictions, loss=loss, gradients=grads)
 
     def test_step(self, validation_dataset):
         avg_valid_loss = 0

@@ -10,18 +10,7 @@ from kyosai.layers import layer_utils
 from numpy import ndarray
 import abc
 import inspect
-import copy
-
-
-class DummyInput:
-    def __init__(self):
-        self.current_shape = None
-        self.from_layer = None
-        self.first_call = True
-
-    @property
-    def shape(self):
-        return self.current_shape
+from kyosai.engine import graph_recorder
 
 
 class Layer(abc.ABC):
@@ -119,14 +108,14 @@ class Layer(abc.ABC):
     def connect(self, layer, *args, **kwargs):
         "Connects the current layer with the previous layer"
 
-        if isinstance(layer, DummyInput):
+        if isinstance(layer, graph_recorder.GraphRecorder):
             layer = layer.from_layer
         self._node_container.connect_nodes(self, layer)
 
         for arg in args:
             if isinstance(arg, Layer):
                 self._node_container.connect_nodes(self, arg)
-            elif isinstance(arg, DummyInput):
+            elif isinstance(arg, graph_recorder.GraphRecorder):
                 self._node_container.connect_nodes(self, arg.from_layer)
             else:
                 raise ValueError(
@@ -136,7 +125,7 @@ class Layer(abc.ABC):
         for k, v in kwargs.items():
             if isinstance(v, Layer):
                 self._node_container.connect_nodes(self, v)
-            elif isinstance(arg, DummyInput):
+            elif isinstance(arg, graph_recorder.GraphRecorder):
                 self._node_container.connect_nodes(self, arg.from_layer)
             else:
                 raise ValueError(
@@ -233,15 +222,15 @@ class Layer(abc.ABC):
             out = self.call(inputs, *args, **kwargs)
             return out
         else:
-            if inputs.from_layer is not None:
+            if inputs.latest_layer is not None:
                 inputs_shape, args_shape, kwargs_shape = self.parse_for_build(
                     inputs, *args, **kwargs
                 )
                 self.build(inputs_shape, *args_shape, **kwargs_shape)
-                self.connect(inputs.from_layer, *args, **kwargs)
-            inputs.current_shape = self.shape
-            inputs.from_layer = self
-            return copy.deepcopy(inputs)
+                self.connect(inputs.latest_layer, *args, **kwargs)
+            inputs.latest_shape = self.shape
+            inputs.latest_layer = self
+            return inputs
 
     def build_for_layer(self, inputs, *args, **kwargs):
         # temporary and will be removed or modified
@@ -252,7 +241,7 @@ class Layer(abc.ABC):
         self.connect(inputs, *args, **kwargs)
         return self
 
-    def build_for_tensors(self, inputs, *args, **kwargs):
+    def build_and_call_for_tensors(self, inputs, *args, **kwargs):
         # temporary and will be removed or modified
         inputs_shape, args_shape, kwargs_shape = self.parse_for_build(
             inputs, *args, **kwargs
@@ -270,14 +259,14 @@ class Layer(abc.ABC):
 
     def __call__(self, *args, **kwargs):
         inputs, args, kwargs = self._call_util.parse_args(*args, **kwargs)
-        if isinstance(inputs, DummyInput):
+        if isinstance(inputs, graph_recorder.GraphRecorder):
             return self.dummy_call(inputs, *args, **kwargs)
 
         if not self.built:
             if isinstance(inputs, (Layer)):
                 return self.build_for_layer(inputs, *args, **kwargs)
             elif isinstance(inputs, (ndarray, DeviceArray, DynamicJaxprTracer)):
-                return self.build_for_tensors(inputs, *args, **kwargs)
+                return self.build_and_call_for_tensors(inputs, *args, **kwargs)
             elif isinstance(inputs, (list, tuple)):
                 self.build_for_list(inputs, *args, **kwargs)
                 if all([isinstance(i, Layer) for i in inputs]):
@@ -300,20 +289,13 @@ class Layer(abc.ABC):
                 return self.call(inputs, *args, **kwargs)
 
     @abc.abstractmethod
-    def call(self, inputs: DeviceArray, **kwargs):
+    def call(self, inputs: DeviceArray, params: Tuple = None, **kwargs):
         raise NotImplementedError(
-            "This method should be implemented in Layer subclasses"
-        )
-
-    @abc.abstractmethod
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        raise NotImplementedError(
-            f"Error in layer {self}"
             "This method should be implemented in Layer subclasses"
         )
 
     def __repr__(self):
-        if self.built:
+        if self.built and getattr(self, 'input_shape', None):
             return f"<{self.name} Layer with input shape {self.input_shape} and output shape {self.shape}>"
         else:
             return f"<{self.name} Layer>"

@@ -24,33 +24,44 @@ class GraphV3(_Model):
         return self.outputs[0] if len(self.outputs) == 1 else []
 
     def _parse_args_and_kwargs(self, *args, **kwargs):
-        allowed_kwargs = {"inputs", "outputs"}
+        allowed_kwargs = {"inputs", "outputs", "input", "output"}
+
 
         if len(args) == 0 and len(kwargs) == 0:
             raise ValueError("`inputs` and `outputs` should be passed to the model.")
 
         if len(args) > 2:
             raise ValueError(
-                "Expected 2 args only which are `inputs` and `ouputs` of type layers"
+                "Expected 2 args only which are `inputs/input` and `ouputs/output` of type `Layer`"
             )
+        
+        if kwargs:
+            for k in kwargs.keys():
+                if k not in allowed_kwargs:
+                    raise ValueError(f'Unknown `{k}` found in kwargs.')
 
-        unknown_kwargs = [k for k in kwargs.keys() if k not in allowed_kwargs]
-        if len(unknown_kwargs) > 0:
-            raise ValueError(f"unknown argument {unknown_kwargs}")
+        inputs = kwargs.pop('inputs', None) or kwargs.pop('input', None)
+        outputs = kwargs.pop('outputs', None) or kwargs.pop('output', None)
 
-        consumed_args = 0
-        if kwargs.get("inputs", False):
-            inputs = generic_utils.flatten(kwargs["inputs"])
-        else:
-            inputs = generic_utils.flatten(args[consumed_args])
-            consumed_args += 1
+        if inputs is None:
+            inputs = generic_utils.flatten(args[0])
+        elif isinstance(inputs, (list, tuple)):
+            inputs = generic_utils.flatten(inputs)
+        elif isinstance(inputs, dict):
+            raise TypeError('`dict` is not supported yet in inputs/input argument.')
 
-        if kwargs.get("outputs", False):
-            outputs = generic_utils.flatten(kwargs["outputs"])
-        else:
-            outputs = generic_utils.flatten(args[consumed_args])
+        if outputs is None:
+            outputs = generic_utils.flatten(args[1])
+        elif isinstance(outputs, (list, tuple)):
+            outputs = generic_utils.flatten(outputs)
+        elif isinstance(outputs, dict):
+            raise TypeError('`dict` is not supported yet in outputs/output argument.')
 
+
+        print(inputs, outputs)
         self._output_names = op.attrgetter("name")(*outputs)
+        
+        
         return inputs, outputs
 
     def _create_graph(self):
@@ -89,8 +100,8 @@ class GraphV3(_Model):
                 )
         return op.itemgetter(*self._output_names)(outputs)
 
-    def call(self, inputs):
-        pass
+    def call(self, inputs, **kwargs):
+        self.call_with_external_weights(self.params, inputs, **kwargs)
 
     def __call__(self, inputs, **kwargs):
         return self.call_with_external_weights(self.params, inputs, **kwargs)
