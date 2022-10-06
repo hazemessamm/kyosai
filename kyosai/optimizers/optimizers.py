@@ -8,10 +8,10 @@ class Optimizer:
     All optimizers should be a subclass from this class
     and all optimizers should follow JAX optimizers rules
 
-    Params:
-        - loss_fn: stores the loss function to get the gradients of the loss function with respect to the params
-        - model: stores the model to update it's weights every step
-        - learning_rate: stores the learning rate (step_size), default: 0.0001
+    Args:
+        loss_fn: stores the loss function to get the gradients of the loss function with respect to the params
+        model: stores the model to update it's weights every step
+        learning_rate: stores the learning rate (step_size), default: 0.0001
     """
 
     def __init__(self, learning_rate=0.001):
@@ -41,8 +41,8 @@ class SGD(Optimizer):
     """
     Optimizer subclass
 
-    Params:
-        - learning_rate: stores the learning rate (step_size), default: 0.0001
+    Args:
+        learning_rate: stores the learning rate (step_size), default: 0.0001
     """
 
     def __init__(self, learning_rate=0.001, momentum=None, nesterov=False):
@@ -67,11 +67,11 @@ class Adam(Optimizer):
     """
     Optimizer subclass
 
-    Params:
-        - learning_rate: stores the learning rate (step_size), default: 0.0001
-        - beta_1: a positive scalar value for beta_1, the exponential decay rate for the first moment estimates
-        - beta_2: a positive scalar value for beta_2, the exponential decay rate for the second moment estimates
-        - epsilon: a positive scalar value for epsilon, a small constant for numerical stability
+    Args:
+        learning_rate: stores the learning rate (step_size), default: 0.0001
+        beta_1: a positive scalar value for beta_1, the exponential decay rate for the first moment estimates
+        beta_2: a positive scalar value for beta_2, the exponential decay rate for the second moment estimates
+        epsilon: a positive scalar value for epsilon, a small constant for numerical stability
     """
 
     def __init__(self, learning_rate=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08):
@@ -89,9 +89,9 @@ class Adagrad(Optimizer):
     """
     Optimizer subclass
 
-    Params:
-        - learning_rate: stores the learning rate (step_size), default: 0.0001
-        - momentum: a positive scalar value for momentum
+    Args:
+        learning_rate: stores the learning rate (step_size), default: 0.0001
+        momentum: a positive scalar value for momentum
     """
 
     def __init__(
@@ -115,11 +115,11 @@ class RMSProp(Optimizer):
     """
     Optimizer subclass
 
-    Params:
-        - loss_fn: stores the loss function to get the gradients of the loss function with respect to the weights
-        - model: stores the model to update it's weights every step
-        - learning_rate: stores the learning rate (step_size)
-        - momentum: a positive scalar value for momentum
+    Args:
+        loss_fn: stores the loss function to get the gradients of the loss function with respect to the weights
+        model: stores the model to update it's weights every step
+        learning_rate: stores the learning rate (step_size)
+        momentum: a positive scalar value for momentum
     """
 
     def __init__(

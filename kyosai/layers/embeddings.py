@@ -5,6 +5,19 @@ from kyosai.layers.base_layer import Layer
 
 
 class Embedding(Layer):
+    """
+    Embedding Layer, (Layer subclass)
+    Args:
+        vocab_size: size of the vocabulary.
+        embedding_dim: dimension of each token in the vocabulary.
+        embeddings_initializer: initializer for the embedding matrix.
+        mask_zero: masks the `0` token if for padding.
+        input_length: maximum input length.
+        seed: random seed.
+        trainable: whether to train or freeze the weights.
+        dtype: Embedding matrix datatype.
+        name: Embedding layer name.
+    """
     def __init__(
         self,
         vocab_size,

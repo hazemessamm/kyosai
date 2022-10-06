@@ -13,7 +13,11 @@ from kyosai.layers.base_layer import Layer
 
 class Input(Layer):
     """
-    Input Layer that stores the input shape
+    Input Layer that stores the input shape.
+    Args:
+        shape: the dimension of the input shape.
+        dtype: the datatype of the inputs.
+        name: name of the `Input` layer.
     """
 
     def __init__(self, shape: Tuple = None, dtype: str = "float32", name: str = None):
@@ -58,11 +62,16 @@ class Dense(Layer):
 
     Dense Layer, (Layer subclass)
 
-    weights:
-    units: stores number of columns (neurons)
-    activation: stores the activation function, default None
-    kernel_initializer: stores the kernel initializer, default "glorot_normal"
-    bias_initializer: stores the bias initializer, default "normal"
+    Args:
+        units: Number of neurons.
+        activation: stores the activation function.
+        kernel_initializer: stores the kernel initializer.
+        bias_initializer: stores the bias initializer.
+        use_bias: Boolean, whether to enable `bias` vector or not.
+        trainable: Boolean, whether to train the weights and the bias (if enabled) or not.
+        seed: random seed.
+        dtype: datatype of the weights and the bias (if enabled).
+
 
     """
 
@@ -136,8 +145,8 @@ class Dense(Layer):
 class Flatten(Layer):
     """
     Flatten Layer, (Layer subclass)
-    weights:
-    key: Pseudo Random Generator Key, default PRNGKey(1)
+    Args:
+        key: Pseudo Random Generator Key, default PRNGKey(1).
 
     """
 
@@ -167,8 +176,8 @@ class Flatten(Layer):
 class GlobalAvgPooling1D(Layer):
     """
     GlobalAvgPooling1D Layer, (Layer subclass)
-    weights:
-    None
+    Args:
+        None
 
     """
 
@@ -198,8 +207,8 @@ class GlobalAvgPooling1D(Layer):
 class GlobalMaxPooling1D(Layer):
     """
     GlobalMaxPooling1D Layer, (Layer subclass)
-    weights:
-    None
+    Args:
+        None
 
     """
 
@@ -229,10 +238,10 @@ class GlobalMaxPooling1D(Layer):
 class Dropout(Layer):
     """
     Dropout Layer, (Layer subclass)
-    weights:
-    rate: probability of turning of a neuron, accepts probability values between 0 and 1
-    training: stores the mode of the layer, accepts boolean
-    key: Pseudo Random Generator Key, default PRNGKey(1)
+    Args:
+        rate: probability of turning of a neuron, accepts probability values between 0 and 1.
+        training: stores the mode of the layer, accepts boolean.
+        key: Pseudo Random Generator Key, default PRNGKey(1).
     """
 
     def __init__(self, rate: float, seed: int = None, name: str = None, **kwargs):
@@ -271,8 +280,8 @@ class Dropout(Layer):
 class Activation(Layer):
     """
     Activation Layer, (Layer subclass)
-    weights:
-    identifier: accepts the activation function as a string or callable
+    Args:
+        identifier: accepts the activation function as a string or callable.
     """
 
     def __init__(self, identifier: Union[str, Callable], **kwargs):
@@ -303,6 +312,11 @@ class Activation(Layer):
 
 
 class Reshape(Layer):
+    """
+    Reshape Layer, (Layer subclass)
+    Args:
+        target_shape: accepts the target shape as a `tuple`.
+    """
     def __init__(self, target_shape, name=None):
         super(Reshape, self).__init__(name=name)
         self.target_shape = target_shape
@@ -326,6 +340,11 @@ class Reshape(Layer):
 
 
 class Squeeze(Layer):
+    """
+    Squeeze Layer, (Layer subclass)
+    Args:
+        axis: accepts the target axis as a `int`.
+    """
     def __init__(self, axis, name=None):
         super(Squeeze, self).__init__(name=name)
         self.axis = axis

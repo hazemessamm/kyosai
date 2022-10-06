@@ -6,6 +6,12 @@ from kyosai.layers.base_layer import Layer
 
 
 class Merge(Layer):
+    """
+    Merge Layer, (Layer subclass)
+    Args:
+        seed: random seed.
+        name: name of the `Merge` layer.
+    """
     def __init__(self, seed: int = None, name: str = None, **kwargs):
         super(Merge, self).__init__(seed=seed, name=name, **kwargs)
         self.supports_specific_axis = False
@@ -57,6 +63,11 @@ class Merge(Layer):
 
 
 class Concatenate(Merge):
+    """
+    Concatenate Layer, (Layer subclass)
+    Args:
+        axis: axis of the concatenation as an `int`.
+    """
     def __init__(self, axis: int = -1, name: str = None, **kwargs):
         super(Concatenate, self).__init__(seed=0, name=name, **kwargs)
         self.supports_different_shapes = False
@@ -91,6 +102,11 @@ class Concatenate(Merge):
 
 
 class Add(Merge):
+    """
+    Add Layer, (Layer subclass)
+    Args:
+        name: name of the `Add` layer.
+    """
     def __init__(self, name: str = None, **kwargs):
         super(Add, self).__init__(seed=0, name=name, **kwargs)
 

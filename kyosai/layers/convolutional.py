@@ -10,21 +10,21 @@ from kyosai.layers.base_layer import Layer
 class Conv1D(Layer):
     """
     Convolutional Layer, (Layer Subclass)
-    weights:
-        - filters: Stores number of filters, accepts int
-        - kernel_size: stores size of each filter, accepts int or tuple of length 1
-        - strides: stores size of the strides, default (1,), accepts int or tuple
-        - padding: padding for the input, accepts "valid" or "same"
-        - activation: stores the activation function, accepts activation as string or callable
-        - kernel_initializer: stores the kernel initializer, default "glorot_uniform"
-        - bias_initializer: stores the bias initializer, default "zeros"
-        - key: stores Pseudo Random Generator Key, default PRNGKey(1)
-        - input_dim_order: stores the order of the dimensions, default NHWC
+    Args:
+        filters: Stores number of filters, accepts int
+        kernel_size: stores size of each filter, accepts int or tuple of length 1
+        strides: stores size of the strides, default (1,), accepts int or tuple
+        padding: padding for the input, accepts "valid" or "same"
+        activation: stores the activation function, accepts activation as string or callable
+        kernel_initializer: stores the kernel initializer, default "glorot_uniform"
+        bias_initializer: stores the bias initializer, default "zeros"
+        key: stores Pseudo Random Generator Key, default PRNGKey(1)
+        input_dim_order: stores the order of the dimensions, default NHWC
             where N=Batch size, H=Height, W=Width and C=Number of channels
-        - kernel_dim_order: stores the order of the dimensions, default HWIO
+        kernel_dim_order: stores the order of the dimensions, default HWIO
             where H = Height, I = Input Size which is the number of channels of the input
             and O = Output size which is the number of the filters
-        - output_dim_order: stores the order of the dimensions, default NHWC
+        output_dim_order: stores the order of the dimensions, default NHWC
 
     """
 
@@ -152,21 +152,21 @@ class Conv1D(Layer):
 class Conv2D(Layer):
     """
     Convolutional Layer, (Layer Subclass)
-    weights:
-        - filters: Stores number of filters, accepts int
-        - kernel_size: stores size of each filter, accepts int or tuple of length 2
-        - strides: stores size of the strides, default (1,1), accepts int or tuple
-        - padding: padding for the input, accepts "valid" or "same"
-        - activation: stores the activation function, accepts activation as string or callable
-        - kernel_initializer: stores the kernel initializer, default "glorot_uniform"
-        - bias_initializer: stores the bias initializer, default "zeros"
-        - key: stores Pseudo Random Generator Key, default PRNGKey(1)
-        - input_dim_order: stores the order of the dimensions, default NHWC
+    Args:
+        filters: Stores number of filters, accepts int
+        kernel_size: stores size of each filter, accepts int or tuple of length 2
+        strides: stores size of the strides, default (1,1), accepts int or tuple
+        padding: padding for the input, accepts "valid" or "same"
+        activation: stores the activation function, accepts activation as string or callable
+        kernel_initializer: stores the kernel initializer, default "glorot_uniform"
+        bias_initializer: stores the bias initializer, default "zeros"
+        key: stores Pseudo Random Generator Key, default PRNGKey(1)
+        input_dim_order: stores the order of the dimensions, default NHWC
             where N=Batch size, H=Height, W=Width and C=Number of channels
-        - kernel_dim_order: stores the order of the dimensions, default HWIO
+        kernel_dim_order: stores the order of the dimensions, default HWIO
             where H=Height, W=Width, I=Input Size which is the number of channels of the input
             and O=Output size which is the number of the filters
-        - output_dim_order: stores the order of the dimensions, default NHWC
+        output_dim_order: stores the order of the dimensions, default NHWC
 
     """
 

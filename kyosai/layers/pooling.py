@@ -84,13 +84,13 @@ class Pooling(Layer):
 
 class MaxPooling1D(Pooling):
     """
-    MaxPool Layer, (Layer subclass)
-    weights:
-        - pool_size: takes the pooling size, default (2,2), accepts int or tuple
-        - strides: stores size of the strides, default (1,1), accepts int or tuple
-        - padding: padding for the input, accepts "valid" or "same"
-        - spec: store the layer specs
-        - key: stores Pseudo Random Generator Key, default PRNGKey(1)
+    MaxPooling1D Layer, (Layer subclass)
+    Args:
+        pool_size: takes the pooling size, default (2,2), accepts int or tuple
+        strides: stores size of the strides, default (1,1), accepts int or tuple
+        padding: padding for the input, accepts "valid" or "same"
+        spec: store the layer specs
+        key: stores Pseudo Random Generator Key, default PRNGKey(1)
     """
 
     def __init__(
@@ -131,12 +131,12 @@ class MaxPooling1D(Pooling):
 class MaxPooling2D(Pooling):
     """
     MaxPool Layer, (Layer subclass)
-    weights:
-        - pool_size: takes the pooling size, default (2,2), accepts int or tuple
-        - strides: stores size of the strides, default (1,1), accepts int or tuple
-        - padding: padding for the input, accepts "valid" or "same"
-        - spec: store the layer specs
-        - key: stores Pseudo Random Generator Key, default PRNGKey(1)
+    Args:
+        pool_size: takes the pooling size, default (2,2), accepts int or tuple
+        strides: stores size of the strides, default (1,1), accepts int or tuple
+        padding: padding for the input, accepts "valid" or "same"
+        spec: store the layer specs
+        key: stores Pseudo Random Generator Key, default PRNGKey(1)
     """
 
     def __init__(
