@@ -57,8 +57,6 @@ class GraphV3(_Model):
         elif isinstance(outputs, dict):
             raise TypeError('`dict` is not supported yet in outputs/output argument.')
 
-
-        print(inputs, outputs)
         self._output_names = op.attrgetter("name")(*outputs)
         
         
