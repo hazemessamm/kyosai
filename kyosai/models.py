@@ -88,7 +88,7 @@ class Sequential(Model):
             outputs = layer.call_with_external_weights(weight, outputs)
         return outputs
 
-    def __call__(self, inputs: Union[ndarray, DeviceArray]):
+    def call(self, inputs: Union[ndarray, DeviceArray]):
         outputs = inputs
         for layer in self.layers:
             outputs = layer(outputs)

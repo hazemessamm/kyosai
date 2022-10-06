@@ -16,6 +16,7 @@ class FullPassOutput(NamedTuple):
     loss: jax.numpy.DeviceArray
     gradients: tuple
 
+
 # Not efficient approach, will be removed or modified
 class InnerGraph:
     def __init__(self, inputs, outputs):
@@ -85,10 +86,6 @@ class _Model(Layer):
         self.is_subclass = False
 
     @property
-    def __name__(self):
-        return self.name
-
-    @property
     def layers(self):
         return self._layers
 
@@ -110,9 +107,8 @@ class _Model(Layer):
             dummy_inputs = [graph_recorder.GraphRecorder() for i in range(len(args))]
             self.call(*dummy_inputs)
             self.is_subclass = True
-
             inputs = [di.input_layers for di in dummy_inputs]
-            # Converting to list because it was a set
+            # Converting to list because it was a set in the `GraphRecorder` class
             outputs = [list(di.output_layers) for di in dummy_inputs]
             self.inner_graph = InnerGraph(inputs=inputs, outputs=outputs)
 
@@ -134,9 +130,6 @@ class _Model(Layer):
     # TODO: implement `build()` method
     def build(self, input_shape):
         pass
-
-    # def get_weights(self):
-    #     return self._weights
 
     def set_weights(self, weights):
         "Set new weights on every layer"
@@ -245,3 +238,7 @@ class _Model(Layer):
                 losses.update(validation_losses)
                 progbar.update(epoch, step, **losses)
             progbar.reset()
+
+    @property
+    def __name__(self):
+        return self.name

@@ -24,7 +24,7 @@ class Conv1DTranspose(Layer):
         **kwargs,
     ):
         super(Conv1DTranspose, self).__init__(
-            seed=seed, trainable=trainable, dtype=dtype, name=name, **kwargs
+            seed=seed, trainable=trainable, dtype=dtype, name=name
         )
         self.filters = filters
         self.kernel_size = kernel_size
@@ -146,7 +146,7 @@ class Conv2DTranspose(Layer):
         **kwargs,
     ):
         super(Conv2DTranspose, self).__init__(
-            seed=seed, trainable=trainable, dtype=dtype, name=name, **kwargs
+            seed=seed, trainable=trainable, dtype=dtype, name=name
         )
         self.filters = filters
         self.kernel_size = kernel_size

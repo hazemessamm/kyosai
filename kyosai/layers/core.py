@@ -88,7 +88,7 @@ class Dense(Layer):
         **kwargs,
     ):
         super(Dense, self).__init__(
-            seed=seed, trainable=trainable, dtype=dtype, **kwargs
+            seed=seed, trainable=trainable, dtype=dtype
         )
         self.units = units
         self.activation = self.get_activation(activation)
@@ -150,8 +150,8 @@ class Flatten(Layer):
 
     """
 
-    def __init__(self, **kwargs):
-        super(Flatten, self).__init__(seed=0, trainable=False, **kwargs)
+    def __init__(self, name=None, **kwargs):
+        super(Flatten, self).__init__(name=name, seed=0, trainable=False)
 
     @property
     def shape(self):
@@ -181,8 +181,8 @@ class GlobalAvgPooling1D(Layer):
 
     """
 
-    def __init__(self, **kwargs):
-        super(GlobalAvgPooling1D, self).__init__(seed=0, trainable=False, **kwargs)
+    def __init__(self, name=None, **kwargs):
+        super(GlobalAvgPooling1D, self).__init__(name=name, seed=0, trainable=False)
 
     @property
     def shape(self):
@@ -212,8 +212,8 @@ class GlobalMaxPooling1D(Layer):
 
     """
 
-    def __init__(self, **kwargs):
-        super(GlobalMaxPooling1D, self).__init__(seed=0, trainable=False, **kwargs)
+    def __init__(self, name=None, **kwargs):
+        super(GlobalMaxPooling1D, self).__init__(name=name, seed=0, trainable=False)
 
     @property
     def shape(self):
@@ -245,7 +245,7 @@ class Dropout(Layer):
     """
 
     def __init__(self, rate: float, seed: int = None, name: str = None, **kwargs):
-        super(Dropout, self).__init__(seed=seed, name=name, **kwargs)
+        super(Dropout, self).__init__(seed=seed, name=name)
         self.rate = rate
 
     @property
@@ -284,8 +284,8 @@ class Activation(Layer):
         identifier: accepts the activation function as a string or callable.
     """
 
-    def __init__(self, identifier: Union[str, Callable], **kwargs):
-        super(Activation, self).__init__(seed=0, **kwargs)
+    def __init__(self, identifier: Union[str, Callable], name=None, **kwargs):
+        super(Activation, self).__init__(name=name, seed=0, **kwargs)
         self._identifier = identifier
         self.activation = activations.get(identifier)
 

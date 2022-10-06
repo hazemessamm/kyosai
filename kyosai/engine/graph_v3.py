@@ -97,7 +97,4 @@ class GraphV3(_Model):
         return op.itemgetter(*self._output_names)(outputs)
 
     def call(self, inputs, **kwargs):
-        self.call_with_external_weights(self.weights, inputs, **kwargs)
-
-    def __call__(self, inputs, **kwargs):
         return self.call_with_external_weights(self.weights, inputs, **kwargs)

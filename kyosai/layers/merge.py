@@ -13,7 +13,7 @@ class Merge(Layer):
         name: name of the `Merge` layer.
     """
     def __init__(self, seed: int = None, name: str = None, **kwargs):
-        super(Merge, self).__init__(seed=seed, name=name, **kwargs)
+        super(Merge, self).__init__(seed=seed, name=name)
         self.supports_specific_axis = False
         self.supported_axis = None
 
@@ -69,7 +69,7 @@ class Concatenate(Merge):
         axis: axis of the concatenation as an `int`.
     """
     def __init__(self, axis: int = -1, name: str = None, **kwargs):
-        super(Concatenate, self).__init__(seed=0, name=name, **kwargs)
+        super(Concatenate, self).__init__(seed=0, name=name)
         self.supports_different_shapes = False
         self.supports_specific_axis = True
         self.supported_axis = axis
@@ -108,7 +108,7 @@ class Add(Merge):
         name: name of the `Add` layer.
     """
     def __init__(self, name: str = None, **kwargs):
-        super(Add, self).__init__(seed=0, name=name, **kwargs)
+        super(Add, self).__init__(seed=0, name=name)
 
     @property
     def shape(self):
