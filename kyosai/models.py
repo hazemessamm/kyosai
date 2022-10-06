@@ -56,7 +56,7 @@ class Sequential(Model):
         super(Sequential, self).__init__(sequential=True, **kwargs)
 
         self._layers: List[Layer] = layers if layers is not None else []
-        self._params: List[Tuple] = []
+        self._weights: List[Tuple] = []
         self.setup_layers()
 
     def setup_layers(self):
@@ -66,26 +66,26 @@ class Sequential(Model):
             self._layers[i](self._layers[i - 1])
 
         for layer in self._layers:
-            self._params.append(layer.params)
+            self._weights.append(layer.weights)
 
     def add(self, layer: Layer):
         if isinstance(layer, Layer):
             if len(self._layers) >= 1:
                 layer(self._layers[-1])
             self._layers.append(layer)
-            self.params.append(layer.params)
+            self.weights.append(layer.weights)
         else:
             raise ValueError(
                 f"add() only accepts layers subclass instances. Recieved: {layer}"
             )
 
     def call_with_external_weights(
-        self, params: List[Tuple], inputs: Union[ndarray, DeviceArray]
+        self, weights: List[Tuple], inputs: Union[ndarray, DeviceArray]
     ):
-        "Accepts params and inputs and returns predictions"
+        "Accepts weights and inputs and returns predictions"
         outputs = inputs
-        for param, layer in zip(params, self.layers):
-            outputs = layer.call_with_external_weights(param, outputs)
+        for weight, layer in zip(weights, self.layers):
+            outputs = layer.call_with_external_weights(weight, outputs)
         return outputs
 
     def __call__(self, inputs: Union[ndarray, DeviceArray]):

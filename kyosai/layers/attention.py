@@ -126,20 +126,20 @@ class MultiHeadAttention(Layer):
         inputs = inputs.transpose(0, 2, 1, 3)
         return inputs.reshape(inputs.shape[0], inputs.shape[1], -1)
 
-    def call_with_external_weights(self, params, query, key, value, mask=None):
+    def call_with_external_weights(self, weights, query, key, value, mask=None):
         queries = self._transpose_qkv(
-            self.q_dense.call_with_external_weights(params[0], query)
+            self.q_dense.call_with_external_weights(weights[0], query)
         )
         keys = self._transpose_qkv(
-            self.k_dense.call_with_external_weights(params[1], key)
+            self.k_dense.call_with_external_weights(weights[1], key)
         )
         values = self._transpose_qkv(
-            self.v_dense.call_with_external_weights(params[2], value)
+            self.v_dense.call_with_external_weights(weights[2], value)
         )
         attention = self.attention_op(queries, keys, values, mask)
         attention = self._transpose_output(attention)
-        attention = self.o_dense.call_with_external_weights(params[3], attention)
+        attention = self.o_dense.call_with_external_weights(weights[3], attention)
         return attention
 
     def call(self, query, key, value, mask=None):
-        return self.call_with_external_weights(self.params, query, key, value, mask)
+        return self.call_with_external_weights(self.weights, query, key, value, mask)

@@ -80,14 +80,14 @@ class Concatenate(Merge):
     def build(self, input_shape: Tuple):
         super().build(input_shape)
 
-    def concatenate_op(self, params: Tuple, inputs: DeviceArray):
+    def concatenate_op(self, weights: Tuple, inputs: DeviceArray):
         return jnp.concatenate(inputs, axis=self.supported_axis)
 
     def call(self, inputs: DeviceArray, **kwargs):
-        return self.concatenate_op(self.params, inputs)
+        return self.concatenate_op(self.weights, inputs)
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        return self.concatenate_op(params, inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        return self.concatenate_op(weights, inputs)
 
 
 class Add(Merge):
@@ -101,7 +101,7 @@ class Add(Merge):
     def compute_output_shape(self, input_shape):
         return input_shape[0]
 
-    def add_op(self, params: Tuple, inputs: DeviceArray):
+    def add_op(self, weights: Tuple, inputs: DeviceArray):
         inputs = jnp.stack(inputs, axis=0)
         return jnp.sum(inputs, axis=0)
 
@@ -109,7 +109,7 @@ class Add(Merge):
         super().build(input_shape)
 
     def call(self, inputs: DeviceArray, **kwargs):
-        return self.add_op(self._params, inputs)
+        return self.add_op(self._weights, inputs)
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        return self.add_op(params, inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        return self.add_op(weights, inputs)

@@ -30,10 +30,6 @@ class InnerGraph:
     def output(self):
         return self.outputs[0] if len(self.outputs) == 1 else []
 
-    @property
-    def params(self):
-        return self._params
-
     def _create_graph(self):
         layers = jax.util.toposort(self.outputs)
 
@@ -49,31 +45,31 @@ class InnerGraph:
             self._layers = layers
             self.built = True
 
-    def call_with_external_weights(self, params, inputs, **kwargs):
+    def call_with_external_weights(self, weights, inputs, **kwargs):
         if not isinstance(inputs, list):
             inputs = [inputs]
         outputs = {f"arg:{i}": inputs[i] for i in range(len(inputs))}
 
-        for param, (layer, parent_layers) in zip(params, self._dependencies.items()):
+        for weight, (layer, parent_layers) in zip(weights, self._dependencies.items()):
             incoming_inputs = op.itemgetter(*parent_layers)(outputs)
             if (
                 isinstance(incoming_inputs, tuple)
                 and self._layers_mapping[layer]._call_util._requires_unpacking
             ):
                 outputs[layer] = self._layers_mapping[layer].call_with_external_weights(
-                    param, *incoming_inputs, **kwargs
+                    weight, *incoming_inputs, **kwargs
                 )
             else:
                 outputs[layer] = self._layers_mapping[layer].call_with_external_weights(
-                    param, incoming_inputs, **kwargs
+                    weight, incoming_inputs, **kwargs
                 )
         return op.itemgetter(*self._output_names)(outputs)
 
     def call(self, inputs, **kwargs):
-        self.call_with_external_weights(self.params, inputs, **kwargs)
+        self.call_with_external_weights(self.weights, inputs, **kwargs)
 
     def __call__(self, inputs, **kwargs):
-        return self.call_with_external_weights(self.params, inputs, **kwargs)
+        return self.call_with_external_weights(self.weights, inputs, **kwargs)
 
 
 class _Model(Layer):
@@ -84,7 +80,6 @@ class _Model(Layer):
         self._compiled = False
         self.trainable = trainable
         self.metrics_instances = {}
-        self._params = []
         self.history = {}
         self.metrics_values = {}
         self.is_subclass = False
@@ -98,17 +93,12 @@ class _Model(Layer):
         return self._layers
 
     @property
-    def params(self):
-        if self._params:
-            return self._params
-        elif self.layers:
-            return [layer.params for layer in self.layers if layer.built]
-        else:
-            return []
-
-    @property
     def weights(self):
-        return self.params
+        return [l.weights for l in self.layers]
+    
+    @property
+    def trainable_weights(self):
+        return [l.trainable_weights for l in self.layers]
 
     @property
     def compiled(self):
@@ -138,39 +128,38 @@ class _Model(Layer):
         if isinstance(self.compiled_optimizer, type):
             self.compiled_optimizer = self.compiled_optimizer()
 
-        self.compiled_optimizer._initialize(self.params)
+        self.compiled_optimizer._initialize(self.weights)
         self._compiled = True
 
     # TODO: implement `build()` method
     def build(self, input_shape):
         pass
 
-    def get_weights(self):
-        return self._params
+    # def get_weights(self):
+    #     return self._weights
 
     def set_weights(self, weights):
         "Set new weights on every layer"
         for layer, w in zip(self.layers, weights):
             layer.set_weights(w)
-        self._params = weights
+        self._weights = weights
 
     def update_weights(self, updated_weights):
         for layer, w in zip(self.layers, updated_weights):
             layer.update_weights(w)
-        self._params = updated_weights
 
     def predict(self, inputs, **kwargs):
         kwargs.pop("training", None)
         return self.call(inputs, training=False, **kwargs)
 
-    def predict_with_external_weights(self, params, inputs, **kwargs):
+    def predict_with_external_weights(self, weights, inputs, **kwargs):
         kwargs.pop("training", None)
-        return self.call_with_external_weights(params, inputs, training=False, **kwargs)
+        return self.call_with_external_weights(weights, inputs, training=False, **kwargs)
 
     def call(self, inputs, **kwargs):
         raise NotImplementedError("`call` should be implemented in a subclass.")
 
-    def call_with_external_weights(self, params, inputs, **kwargs):
+    def call_with_external_weights(self, weights, inputs, **kwargs):
         raise NotImplementedError(
             "`call_with_external_weights` should be implemented in a subclass."
         )
@@ -178,29 +167,29 @@ class _Model(Layer):
     def train_step(self, x, y):
         "Returns loss value and takes training batch"
         forward_backward_output = self.compute_forward_and_backward_pass(x, y)
-        self.minimize(self.params, forward_backward_output.gradients)
+        self.minimize(self.weights, forward_backward_output.gradients)
         return {"Loss": forward_backward_output.loss}
 
     def _compute_loss(self, y, y_pred):
         return self.compiled_loss(y, y_pred)
 
-    def minimize(self, params, gradients):
-        new_params = self.compiled_optimizer.minimize(params, gradients)
-        self.update_weights(new_params)
+    def minimize(self, weights, gradients):
+        new_weights = self.compiled_optimizer.minimize(weights, gradients)
+        self.update_weights(new_weights)
 
     def compute_forward_and_backward_pass(self, x, y) -> FullPassOutput:
         if not self.is_subclass:
-            def grad_fn(params, x, y):
-                preds = self.call_with_external_weights(params, x)
+            def grad_fn(weights, x, y):
+                preds = self.call_with_external_weights(weights, x)
                 loss_val = self._compute_loss(y, preds)
                 return (loss_val, preds)
         else:
-            def grad_fn(params, x, y):
-                preds = self.inner_graph.call_with_external_weights(params, x)
+            def grad_fn(weights, x, y):
+                preds = self.inner_graph.call_with_external_weights(weights, x)
                 loss_val = self._compute_loss(y, preds)
                 return (loss_val, preds)
         
-        (loss, predictions), grads = jax.value_and_grad(grad_fn, argnums=0, has_aux=True)(self.params, x, y)
+        (loss, predictions), grads = jax.value_and_grad(grad_fn, argnums=0, has_aux=True)(self.weights, x, y)
         return FullPassOutput(predictions=predictions, loss=loss, gradients=grads)
 
     def test_step(self, validation_dataset):

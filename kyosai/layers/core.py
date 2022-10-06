@@ -49,7 +49,7 @@ class Input(Layer):
             )
         return inputs
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
         return inputs
 
 
@@ -58,7 +58,7 @@ class Dense(Layer):
 
     Dense Layer, (Layer subclass)
 
-    params:
+    weights:
     units: stores number of columns (neurons)
     activation: stores the activation function, default None
     kernel_initializer: stores the kernel initializer, default "glorot_normal"
@@ -113,20 +113,20 @@ class Dense(Layer):
             )
         self.built = True
 
-    def dense_op(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        output = jnp.matmul(inputs, params[0])
-        return jnp.add(output, params[1]) if self.use_bias else output
+    def dense_op(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        output = jnp.matmul(inputs, weights[0])
+        return jnp.add(output, weights[1]) if self.use_bias else output
 
     def call(self, inputs: DeviceArray, **kwargs):
         "Used during training to pass the parameters while getting the gradients"
-        output = self.dense_op(self.params, inputs)
+        output = self.dense_op(self.weights, inputs)
 
         if self.activation:
             output = self.activation(output)
         return output
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        output = self.dense_op(params, inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        output = self.dense_op(weights, inputs)
 
         if self.activation:
             output = self.activation(output)
@@ -136,7 +136,7 @@ class Dense(Layer):
 class Flatten(Layer):
     """
     Flatten Layer, (Layer subclass)
-    params:
+    weights:
     key: Pseudo Random Generator Key, default PRNGKey(1)
 
     """
@@ -152,22 +152,22 @@ class Flatten(Layer):
         self._input_shape = input_shape
         self.built = True
 
-    def flatten_op(self, params: Tuple, inputs: DeviceArray):
+    def flatten_op(self, weights: Tuple, inputs: DeviceArray):
         return lax.reshape(inputs, (inputs.shape[0], *self.shape[1:]))
 
     def call(self, inputs: DeviceArray, **kwargs):
         "Used during training to pass the parameters while getting the gradients"
-        output = self.flatten_op(self.params, inputs)
+        output = self.flatten_op(self.weights, inputs)
         return output
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        return self.flatten_op(params, inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        return self.flatten_op(weights, inputs)
 
 
 class GlobalAvgPooling1D(Layer):
     """
     GlobalAvgPooling1D Layer, (Layer subclass)
-    params:
+    weights:
     None
 
     """
@@ -183,22 +183,22 @@ class GlobalAvgPooling1D(Layer):
         self._input_shape = input_shape[-1]
         self.built = True
 
-    def global_avg_pooling_op(self, params: Tuple, inputs: DeviceArray):
+    def global_avg_pooling_op(self, weights: Tuple, inputs: DeviceArray):
         return jax.numpy.mean(inputs, axis=1)
 
     def call(self, inputs: DeviceArray, **kwargs):
         "Used during training to pass the parameters while getting the gradients"
-        output = self.global_avg_pooling_op(self.params, inputs)
+        output = self.global_avg_pooling_op(self.weights, inputs)
         return output
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        return self.global_avg_pooling_op(params, inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        return self.global_avg_pooling_op(weights, inputs)
 
 
 class GlobalMaxPooling1D(Layer):
     """
     GlobalMaxPooling1D Layer, (Layer subclass)
-    params:
+    weights:
     None
 
     """
@@ -214,22 +214,22 @@ class GlobalMaxPooling1D(Layer):
         self._input_shape = input_shape[-1]
         self.built = True
 
-    def global_max_pooling_op(self, params: Tuple, inputs: DeviceArray):
+    def global_max_pooling_op(self, weights: Tuple, inputs: DeviceArray):
         return jax.numpy.max(inputs, axis=1)
 
     def call(self, inputs: DeviceArray, **kwargs):
         "Used during training to pass the parameters while getting the gradients"
-        output = self.global_max_pooling_op(self.params, inputs)
+        output = self.global_max_pooling_op(self.weights, inputs)
         return output
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        return self.global_max_pooling_op(params, inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        return self.global_max_pooling_op(weights, inputs)
 
 
 class Dropout(Layer):
     """
     Dropout Layer, (Layer subclass)
-    params:
+    weights:
     rate: probability of turning of a neuron, accepts probability values between 0 and 1
     training: stores the mode of the layer, accepts boolean
     key: Pseudo Random Generator Key, default PRNGKey(1)
@@ -247,31 +247,31 @@ class Dropout(Layer):
         self._input_shape = input_shape
         self.built = True
 
-    def dropout_op(self, params: Tuple, inputs: DeviceArray):
+    def dropout_op(self, weights: Tuple, inputs: DeviceArray):
         keep = random.bernoulli(self.seed, self.rate, inputs.shape)
         return jnp.where(keep, inputs / self.rate, 0)
 
-    def identity_op(self, params, inputs):
+    def identity_op(self, weights, inputs):
         return inputs
 
     def call(self, inputs: DeviceArray, training=True):
         "Used during training to pass the parameters while getting the gradients"
         return lax.cond(
-            training, lambda: self.dropout_op(self.params, inputs), lambda: inputs
+            training, lambda: self.dropout_op(self.weights, inputs), lambda: inputs
         )
 
     def call_with_external_weights(
-        self, params: Tuple, inputs: DeviceArray, training=True
+        self, weights: Tuple, inputs: DeviceArray, training=True
     ):
         return lax.cond(
-            training, lambda: self.dropout_op(self.params, inputs), lambda: inputs
+            training, lambda: self.dropout_op(self.weights, inputs), lambda: inputs
         )
 
 
 class Activation(Layer):
     """
     Activation Layer, (Layer subclass)
-    params:
+    weights:
     identifier: accepts the activation function as a string or callable
     """
 
@@ -288,7 +288,7 @@ class Activation(Layer):
     def shape(self):
         return self._input_shape
 
-    def activation_op(self, params: Tuple, inputs: DeviceArray):
+    def activation_op(self, weights: Tuple, inputs: DeviceArray):
         return self.activation(inputs)
 
     def build(self, input_shape: Tuple):
@@ -296,10 +296,10 @@ class Activation(Layer):
         self.built = True
 
     def call(self, inputs: DeviceArray):
-        return self.activation_op(self.params, inputs)
+        return self.activation_op(self.weights, inputs)
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray):
-        return self.activation_op(params, inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray):
+        return self.activation_op(weights, inputs)
 
 
 class Reshape(Layer):
@@ -315,14 +315,14 @@ class Reshape(Layer):
         self._input_shape = input_shape
         self.built = True
 
-    def reshape_op(self, params, inputs):
+    def reshape_op(self, weights, inputs):
         return lax.reshape(inputs, (inputs.shape[0], *self.target_shape))
 
     def call(self, inputs):
-        return self.reshape_op(self.params, inputs)
+        return self.reshape_op(self.weights, inputs)
 
-    def call_with_external_weights(self, params, inputs):
-        return self.reshape_op(params, inputs)
+    def call_with_external_weights(self, weights, inputs):
+        return self.reshape_op(weights, inputs)
 
 
 class Squeeze(Layer):
@@ -339,11 +339,11 @@ class Squeeze(Layer):
         self._shape = (*input_shape[: self.axis], *input_shape[self.axis + 1 :])
         self.built = True
 
-    def squeeze_op(self, params, inputs):
+    def squeeze_op(self, weights, inputs):
         return lax.squeeze(inputs, (self.axis,))
 
     def call(self, inputs):
-        return self.squeeze_op(self.params, inputs)
+        return self.squeeze_op(self.weights, inputs)
 
-    def call_with_external_weights(self, params, inputs):
-        return self.squeeze_op(params, inputs)
+    def call_with_external_weights(self, weights, inputs):
+        return self.squeeze_op(weights, inputs)

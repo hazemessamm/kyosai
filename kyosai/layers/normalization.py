@@ -23,14 +23,14 @@ class BatchNormalization(Layer):
 
     def build(self, input_shape: tuple):
         init_fun, self.apply_fn = stax.BatchNorm(axis=self.axis)
-        self.shape, self._params = init_fun(rng=self.key, input_shape=input_shape)
+        self.shape, self._weights = init_fun(rng=self.key, input_shape=input_shape)
         self.input_shape = self.shape
         self.built = True
 
     def call(self, inputs: DeviceArray, **kwargs):
-        output = self.apply_fn(params=self._params, x=inputs)
+        output = self.apply_fn(weights=self._weights, x=inputs)
         return output
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        output = self.apply_fn(params=params, inputs=inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        output = self.apply_fn(weights=weights, inputs=inputs)
         return output

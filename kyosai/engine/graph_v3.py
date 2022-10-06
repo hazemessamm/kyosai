@@ -14,7 +14,7 @@ class GraphV3(_Model):
         self.inputs, self.outputs = self._parse_args_and_kwargs(*args, **kwargs)
         self._layers_mapping: Dict[str, Layer] = OrderedDict()
         self._dependencies = OrderedDict()
-        self._params = []
+        # self._weights = []
         self._output_names = [output.name for output in self.outputs]
         self._create_graph()
         generic_utils.jit_call(self)
@@ -58,8 +58,6 @@ class GraphV3(_Model):
             raise TypeError('`dict` is not supported yet in outputs/output argument.')
 
         self._output_names = op.attrgetter("name")(*outputs)
-        
-        
         return inputs, outputs
 
     def _create_graph(self):
@@ -74,32 +72,32 @@ class GraphV3(_Model):
                 parents = [parent_layer.name for parent_layer in layer.parents]
             self._dependencies[layer.name] = parents
             self._layers_mapping[layer.name] = layer
-            self._params.append(layer.params)
+            # self._weights.append(layer.weights)
             self._layers = layers
             self.built = True
 
-    def call_with_external_weights(self, params, inputs, **kwargs):
+    def call_with_external_weights(self, weights, inputs, **kwargs):
         if not isinstance(inputs, list):
             inputs = [inputs]
         outputs = {f"arg:{i}": inputs[i] for i in range(len(inputs))}
 
-        for param, (layer, parent_layers) in zip(params, self._dependencies.items()):
+        for weight, (layer, parent_layers) in zip(weights, self._dependencies.items()):
             incoming_inputs = op.itemgetter(*parent_layers)(outputs)
             if (
                 isinstance(incoming_inputs, tuple)
                 and self._layers_mapping[layer]._call_util._requires_unpacking
             ):
                 outputs[layer] = self._layers_mapping[layer].call_with_external_weights(
-                    param, *incoming_inputs, **kwargs
+                    weight, *incoming_inputs, **kwargs
                 )
             else:
                 outputs[layer] = self._layers_mapping[layer].call_with_external_weights(
-                    param, incoming_inputs, **kwargs
+                    weight, incoming_inputs, **kwargs
                 )
         return op.itemgetter(*self._output_names)(outputs)
 
     def call(self, inputs, **kwargs):
-        self.call_with_external_weights(self.params, inputs, **kwargs)
+        self.call_with_external_weights(self.weights, inputs, **kwargs)
 
     def __call__(self, inputs, **kwargs):
-        return self.call_with_external_weights(self.params, inputs, **kwargs)
+        return self.call_with_external_weights(self.weights, inputs, **kwargs)

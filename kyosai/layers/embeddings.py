@@ -45,26 +45,26 @@ class Embedding(Layer):
         )
 
         if self.mask_zero:
-            self._params[0][0] = 0.0
+            self._weights[0][0] = 0.0
 
         self.built = True
 
-    def embedding_lookup(self, params, inputs):
-        return params[0][(inputs,)]
+    def embedding_lookup(self, weights, inputs):
+        return weights[0][(inputs,)]
 
-    def embedding_op(self, params, inputs, training=True):
+    def embedding_op(self, weights, inputs, training=True):
         inputs = jax.nn.one_hot(inputs, self.vocab_size, dtype=jnp.int64)
-        return jnp.dot(inputs, params[0])
+        return jnp.dot(inputs, weights[0])
 
-    def call_with_external_weights(self, params, inputs, training=True):
+    def call_with_external_weights(self, weights, inputs, training=True):
         if inputs.dtype != jnp.int64:
             if inputs.dtype in {jnp.int32, jnp.int16, jnp.int8}:
                 inputs = inputs.astype("int64")
         return lax.cond(
             training,
-            lambda: self.embedding_op(params, inputs),
-            lambda: self.embedding_lookup(params, inputs),
+            lambda: self.embedding_op(weights, inputs),
+            lambda: self.embedding_lookup(weights, inputs),
         )
 
     def call(self, inputs, training=True):
-        return self.call_with_external_weights(self.params, inputs, training=training)
+        return self.call_with_external_weights(self.weights, inputs, training=training)

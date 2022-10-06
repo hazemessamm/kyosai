@@ -85,7 +85,7 @@ class Pooling(Layer):
 class MaxPooling1D(Pooling):
     """
     MaxPool Layer, (Layer subclass)
-    Params:
+    weights:
         - pool_size: takes the pooling size, default (2,2), accepts int or tuple
         - strides: stores size of the strides, default (1,1), accepts int or tuple
         - padding: padding for the input, accepts "valid" or "same"
@@ -114,24 +114,24 @@ class MaxPooling1D(Pooling):
             **kwargs,
         )
 
-    def maxpool_op(self, params: Tuple, inputs: DeviceArray):
+    def maxpool_op(self, weights: Tuple, inputs: DeviceArray):
         return lax.reduce_window(
             inputs, -jnp.inf, lax.max, self.pool_size, self.strides, self.padding
         )
 
     def call(self, inputs: DeviceArray, **kwargs):
-        self.output = self.maxpool_op(self.params, inputs)
+        self.output = self.maxpool_op(self.weights, inputs)
         return self.output
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        self.output = self.maxpool_op(params, inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        self.output = self.maxpool_op(weights, inputs)
         return self.output
 
 
 class MaxPooling2D(Pooling):
     """
     MaxPool Layer, (Layer subclass)
-    Params:
+    weights:
         - pool_size: takes the pooling size, default (2,2), accepts int or tuple
         - strides: stores size of the strides, default (1,1), accepts int or tuple
         - padding: padding for the input, accepts "valid" or "same"
@@ -160,17 +160,17 @@ class MaxPooling2D(Pooling):
             **kwargs,
         )
 
-    def maxpool_op(self, params: Tuple, inputs: DeviceArray):
+    def maxpool_op(self, weights: Tuple, inputs: DeviceArray):
         return lax.reduce_window(
             inputs, -jnp.inf, lax.max, self.pool_size, self.strides, self.padding
         )
 
     def call(self, inputs: DeviceArray, **kwargs):
-        self.output = self.maxpool_op(self.params, inputs)
+        self.output = self.maxpool_op(self.weights, inputs)
         return self.output
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        self.output = self.maxpool_op(params, inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        self.output = self.maxpool_op(weights, inputs)
         return self.output
 
 
@@ -196,7 +196,7 @@ class AveragePooling2D(Pooling):
             **kwargs,
         )
 
-    def avgpool_op(self, params: Tuple, inputs: DeviceArray):
+    def avgpool_op(self, weights: Tuple, inputs: DeviceArray):
         out = lax.reduce_window(
             inputs, 0.0, lax.add, self.pool_size, self.strides, self.padding
         )
@@ -207,7 +207,7 @@ class AveragePooling2D(Pooling):
         return lax.div(out, window_sizes)
 
     def call(self, inputs, **kwargs):
-        return self.avgpool_op(self.params, inputs)
+        return self.avgpool_op(self.weights, inputs)
 
-    def call_with_external_weights(self, params, inputs, **kwargs):
-        return self.avgpool_op(params, inputs)
+    def call_with_external_weights(self, weights, inputs, **kwargs):
+        return self.avgpool_op(weights, inputs)

@@ -10,7 +10,7 @@ from kyosai.layers.base_layer import Layer
 class Conv1D(Layer):
     """
     Convolutional Layer, (Layer Subclass)
-    Params:
+    weights:
         - filters: Stores number of filters, accepts int
         - kernel_size: stores size of each filter, accepts int or tuple of length 1
         - strides: stores size of the strides, default (1,), accepts int or tuple
@@ -127,32 +127,32 @@ class Conv1D(Layer):
         )
         self.built = True
 
-    def convolution_op(self, params: Tuple, inputs: DeviceArray):
+    def convolution_op(self, weights: Tuple, inputs: DeviceArray):
         output = lax.conv_general_dilated(
             lhs=inputs,
-            rhs=params[0],
+            rhs=weights[0],
             window_strides=self.strides,
             padding=self.padding,
             dimension_numbers=self.dn,
         )
         if self.use_bias:
-            output = jnp.add(output, params[1])
+            output = jnp.add(output, weights[1])
 
         if self.activation:
             output = self.activation(output)
         return output
 
     def call(self, inputs: DeviceArray, **kwargs):
-        return self.convolution_op(self.params, inputs)
+        return self.convolution_op(self.weights, inputs)
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        return self.convolution_op(params, inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        return self.convolution_op(weights, inputs)
 
 
 class Conv2D(Layer):
     """
     Convolutional Layer, (Layer Subclass)
-    Params:
+    weights:
         - filters: Stores number of filters, accepts int
         - kernel_size: stores size of each filter, accepts int or tuple of length 2
         - strides: stores size of the strides, default (1,1), accepts int or tuple
@@ -273,23 +273,23 @@ class Conv2D(Layer):
         )
         self.built = True
 
-    def convolution_op(self, params: Tuple, inputs: DeviceArray):
+    def convolution_op(self, weights: Tuple, inputs: DeviceArray):
         output = lax.conv_general_dilated(
             lhs=inputs,
-            rhs=params[0],
+            rhs=weights[0],
             window_strides=self.strides,
             padding=self.padding,
             dimension_numbers=self.dn,
         )
         if self.use_bias:
-            output = jnp.add(output, params[1])
+            output = jnp.add(output, weights[1])
 
         if self.activation:
             output = self.activation(output)
         return output
 
     def call(self, inputs: DeviceArray, **kwargs):
-        return self.convolution_op(self.params, inputs)
+        return self.convolution_op(self.weights, inputs)
 
-    def call_with_external_weights(self, params: Tuple, inputs: DeviceArray, **kwargs):
-        return self.convolution_op(params, inputs)
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
+        return self.convolution_op(weights, inputs)

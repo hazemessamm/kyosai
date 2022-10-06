@@ -20,21 +20,21 @@ class Optimizer:
         self._initialized = False
         self._apply_updates = jit(optax.apply_updates)
 
-    def _initialize(self, params):
-        self._optimizer_state = self._optimizer.init(params)
+    def _initialize(self, weights):
+        self._optimizer_state = self._optimizer.init(weights)
         self._initialized = True
 
-    def minimize(self, params, grads):
-        "Updates the model params"
+    def minimize(self, weights, grads):
+        "Updates the model weights"
         if not self._initialized:
-            self._initialize(params)
+            self._initialize(weights)
         # returns new optimizer state by calling the update function
         updates, self._optimizer_state = self._optimizer_update(
             grads, self._optimizer_state
         )
         # Apply new weights on the current weights
-        new_params = self._apply_updates(params, updates)
-        return new_params
+        weights = self._apply_updates(weights, updates)
+        return weights
 
 
 class SGD(Optimizer):
@@ -50,9 +50,9 @@ class SGD(Optimizer):
         """
         Initializes the Stochastic Gradient Descent
         returns initializer function, update function and get params function
-        init function just takes the current model params
+        init function just takes the current model weights
         update function takes the step index, gradients and the current optimizer state
-        get params takes the optimizer state and returns the params
+        get params takes the optimizer state and returns the weights
         """
         self._momentum = momentum
         self._nesterov = nesterov
@@ -116,7 +116,7 @@ class RMSProp(Optimizer):
     Optimizer subclass
 
     Params:
-        - loss_fn: stores the loss function to get the gradients of the loss function with respect to the params
+        - loss_fn: stores the loss function to get the gradients of the loss function with respect to the weights
         - model: stores the model to update it's weights every step
         - learning_rate: stores the learning rate (step_size)
         - momentum: a positive scalar value for momentum

@@ -110,22 +110,22 @@ class Conv1DTranspose(Layer):
         )
         self.built = True
 
-    def convolution_transpose_op(self, params, inputs, **kwargs):
+    def convolution_transpose_op(self, weights, inputs, **kwargs):
         output = lax.conv_transpose(
-            inputs, params[0], self.strides, self.padding, dimension_numbers=self.dn
+            inputs, weights[0], self.strides, self.padding, dimension_numbers=self.dn
         )
         if self.use_bias:
-            output = jnp.add(output, params[1])
+            output = jnp.add(output, weights[1])
 
         if self.activation:
             output = self.activation(output)
         return output
 
     def call(self, inputs, **kwargs):
-        return self.convolution_transpose_op(self.params, inputs)
+        return self.convolution_transpose_op(self.weights, inputs)
 
-    def call_with_external_weights(self, params, inputs, **kwargs):
-        return self.convolution_transpose_op(params, inputs)
+    def call_with_external_weights(self, weights, inputs, **kwargs):
+        return self.convolution_transpose_op(weights, inputs)
 
 
 class Conv2DTranspose(Layer):
@@ -237,19 +237,19 @@ class Conv2DTranspose(Layer):
         )
         self.built = True
 
-    def convolution_transpose_op(self, params, inputs, **kwargs):
+    def convolution_transpose_op(self, weights, inputs, **kwargs):
         output = lax.conv_transpose(
-            inputs, params[0], self.strides, self.padding, dimension_numbers=self.dn
+            inputs, weights[0], self.strides, self.padding, dimension_numbers=self.dn
         )
         if self.use_bias:
-            output = jnp.add(output, params[1])
+            output = jnp.add(output, weights[1])
 
         if self.activation:
             output = self.activation(output)
         return output
 
     def call(self, inputs, **kwargs):
-        return self.convolution_transpose_op(self.params, inputs)
+        return self.convolution_transpose_op(self.weights, inputs)
 
-    def call_with_external_weights(self, params, inputs, **kwargs):
-        return self.convolution_transpose_op(params, inputs)
+    def call_with_external_weights(self, weights, inputs, **kwargs):
+        return self.convolution_transpose_op(weights, inputs)

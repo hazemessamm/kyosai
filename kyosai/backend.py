@@ -66,15 +66,15 @@ def device_put(x, id):
 
 
 def get_model_gradients(model, loss):
-    def _get_loss(params, x, y):
-        preds = model.call_with_external_weights(params, x)
+    def _get_loss(weights, x, y):
+        preds = model.call_with_external_weights(weights, x)
         loss_val = loss(y, preds)
         return (loss_val, preds)
 
     _get_grads = jax.value_and_grad(_get_loss, argnums=0, has_aux=True)
 
     def call(x, y):
-        loss_and_preds, grads = _get_grads(model.params, x, y)
+        loss_and_preds, grads = _get_grads(model.weights, x, y)
         return (*loss_and_preds, grads)
 
     return call

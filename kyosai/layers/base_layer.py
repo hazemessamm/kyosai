@@ -24,8 +24,8 @@ class Layer(abc.ABC):
         self.name = backend.memoize(self.__class__.__name__ if name is None else name)
         layer_utils.jit_layer_call(self)
 
-        # Stores the layer params
-        self._params = []
+        # Stores the layer weights
+        self._weights = []
         self._node_container = NodeContainer()
         self.seed = PRNGKey(layer_utils.check_seed(seed))
         self.trainable = trainable
@@ -72,25 +72,32 @@ class Layer(abc.ABC):
 
     @property
     def weights(self):
-        "returns weights"
-        return self._params
+        if not self.built:
+            raise Exception(
+                f"Error in layer {self}. Layer is not built yet. use `build()` method."
+            )
+        weights = [weight.get_weights() for weight in self._weights]
+        if self._has_nested_layers:
+            nested_weights = tuple(layer.weights for layer in self._layers)
+            weights.extend(nested_weights)
+        return tuple(weights)
 
     @property
-    def params(self):
+    def named_weights(self):
+        return {weight.name: weight.get_weights() for weight in self._weights}
+    
+    @property
+    def trainable_weights(self):
         if not self.built:
             raise Exception(
                 f"Error in layer {self}. Layer is not built yet. use `build()` method."
             )
 
-        params = [param.get_weights() for param in self._params]
+        weights = [weight.get_weights() if weight.trainable else () for weight in self._weights]
         if self._has_nested_layers:
-            nested_params = tuple(layer.params for layer in self._layers)
-            params.extend(nested_params)
-        return tuple(params)
-
-    @property
-    def named_params(self):
-        return {param.name: param.get_weights() for param in self._params}
+            nested_weights = tuple(layer.trainable_weights for layer in self._layers)
+            weights.extend(nested_weights)
+        return tuple(weights)
 
     def build(self, input_shape: Tuple):
         raise NotImplementedError(
@@ -142,30 +149,30 @@ class Layer(abc.ABC):
         trainable: bool,
     ):
         weight = Weight(key, shape, initializer, dtype, name, trainable)
-        self._params.append(weight)
+        self._weights.append(weight)
         return weight
 
     def get_weights(self):
-        return self._params
+        return self._weights
 
     def set_weights(self, new_weights: Tuple):
         if len(new_weights) > 0:
             if self._has_nested_layers:
                 for layer in self._layers:
-                    for w1, w2 in zip(layer._params, new_weights):
+                    for w1, w2 in zip(layer._weights, new_weights):
                         w1.set_weights(w2)
             else:
-                for w1, w2 in zip(self._params, new_weights):
+                for w1, w2 in zip(self._weights, new_weights):
                     w1.set_weights(w2)
 
     def update_weights(self, new_weights: Tuple):
         if len(new_weights) > 0:
-            for w_old, w_new in zip(self._params, new_weights):
+            for w_old, w_new in zip(self._weights, new_weights):
                 w_old.update_weights(w_new)
 
             if self._has_nested_layers:
                 for layer, new_weight in zip(self._layers, new_weights):
-                    for w_old, w_new in zip(layer._params, new_weight):
+                    for w_old, w_new in zip(layer._weights, new_weight):
                         w_old.update_weights(w_new)
 
     def check_shape_if_built(self, layers):
@@ -284,7 +291,7 @@ class Layer(abc.ABC):
                 return self.call(inputs, *args, **kwargs)
 
     @abc.abstractmethod
-    def call(self, inputs: DeviceArray, params: Tuple = None, **kwargs):
+    def call(self, inputs: DeviceArray, weights: Tuple = None, **kwargs):
         raise NotImplementedError(
             "This method should be implemented in Layer subclasses"
         )

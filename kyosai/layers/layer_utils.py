@@ -24,15 +24,15 @@ def jit_layer_call(layer):
 
 
 def validate_layer_options(layer):
-    call_with_external_weights_params = inspect.getfullargspec(
+    call_with_external_weights_weights = inspect.getfullargspec(
         layer.call_with_external_weights
     ).args
-    if call_with_external_weights_params[0] == "self":
-        call_with_external_weights_params = call_with_external_weights_params[1:]
-    if call_with_external_weights_params[0] != "params":
+    if call_with_external_weights_weights[0] == "self":
+        call_with_external_weights_weights = call_with_external_weights_weights[1:]
+    if call_with_external_weights_weights[0] != "weights":
         raise ValueError(
-            f"`params` argument should be added as the first argument in `call_with_external_weights` function."
-            f"Recieved: {call_with_external_weights_params}"
+            f"`weights` argument should be added as the first argument in `call_with_external_weights` function."
+            f"Recieved: {call_with_external_weights_weights}"
         )
 
 
