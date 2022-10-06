@@ -18,6 +18,7 @@ class Embedding(Layer):
         dtype: Embedding matrix datatype.
         name: Embedding layer name.
     """
+
     def __init__(
         self,
         vocab_size,

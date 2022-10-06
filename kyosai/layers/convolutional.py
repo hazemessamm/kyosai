@@ -44,7 +44,9 @@ class Conv1D(Layer):
         name: str = None,
         **kwargs,
     ):
-        super(Conv1D, self).__init__(seed=seed, trainable=trainable, dtype=dtype, name=name)
+        super(Conv1D, self).__init__(
+            seed=seed, trainable=trainable, dtype=dtype, name=name
+        )
         self.filters = filters
         self.kernel_size = kernel_size
         self.strides = strides
@@ -184,7 +186,9 @@ class Conv2D(Layer):
         name: str = None,
         **kwargs,
     ):
-        super(Conv2D, self).__init__(seed=seed, trainable=trainable, dtype=dtype, name=name)
+        super(Conv2D, self).__init__(
+            seed=seed, trainable=trainable, dtype=dtype, name=name
+        )
         self.filters = filters
         self.kernel_size = kernel_size
         self.strides = strides

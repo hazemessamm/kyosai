@@ -1,13 +1,12 @@
 from typing import Any, List, Tuple, Union
 
 from jax.interpreters.partial_eval import DynamicJaxprTracer
-from jax.numpy import DeviceArray
+from jax.numpy import DeviceArray, ndarray
 from jax.random import PRNGKey
 from kyosai import activations, backend
 from kyosai.engine.containers import NodeContainer, Weight
 from kyosai.initializers import Initializer, initializers
 from kyosai.layers import layer_utils
-from numpy import ndarray
 import abc
 import inspect
 from kyosai.engine import graph_recorder
@@ -85,7 +84,7 @@ class Layer(abc.ABC):
     @property
     def named_weights(self):
         return {weight.name: weight.get_weights() for weight in self._weights}
-    
+
     @property
     def trainable_weights(self):
         if not self.built:
@@ -93,7 +92,9 @@ class Layer(abc.ABC):
                 f"Error in layer {self}. Layer is not built yet. use `build()` method."
             )
 
-        weights = [weight.get_weights() if weight.trainable else () for weight in self._weights]
+        weights = [
+            weight.get_weights() if weight.trainable else () for weight in self._weights
+        ]
         if self._has_nested_layers:
             nested_weights = tuple(layer.trainable_weights for layer in self._layers)
             weights.extend(nested_weights)
@@ -297,7 +298,7 @@ class Layer(abc.ABC):
         )
 
     def __repr__(self):
-        if self.built and getattr(self, 'input_shape', None):
+        if self.built and getattr(self, "input_shape", None):
             return f"<{self.name} Layer with input shape {self.input_shape} and output shape {self.shape}>"
         else:
             return f"<{self.name} Layer>"

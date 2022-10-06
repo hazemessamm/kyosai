@@ -110,7 +110,7 @@ class MaxPooling1D(Pooling):
             dims=1,
             seed=seed,
             dtype=dtype,
-            name=name
+            name=name,
         )
 
     def maxpool_op(self, weights: Tuple, inputs: DeviceArray):
@@ -155,7 +155,7 @@ class MaxPooling2D(Pooling):
             dims=2,
             seed=seed,
             dtype=dtype,
-            name=name
+            name=name,
         )
 
     def maxpool_op(self, weights: Tuple, inputs: DeviceArray):
@@ -190,7 +190,7 @@ class AveragePooling2D(Pooling):
             seed=seed,
             dtype=dtype,
             name=name,
-            expand_dims=False
+            expand_dims=False,
         )
 
     def avgpool_op(self, weights: Tuple, inputs: DeviceArray):

@@ -26,7 +26,6 @@ class GraphV3(_Model):
     def _parse_args_and_kwargs(self, *args, **kwargs):
         allowed_kwargs = {"inputs", "outputs", "input", "output"}
 
-
         if len(args) == 0 and len(kwargs) == 0:
             raise ValueError("`inputs` and `outputs` should be passed to the model.")
 
@@ -34,30 +33,30 @@ class GraphV3(_Model):
             raise ValueError(
                 "Expected 2 args only which are `inputs/input` and `ouputs/output` of type `Layer`"
             )
-        
+
         if kwargs:
             for k in kwargs.keys():
                 if k not in allowed_kwargs:
-                    raise ValueError(f'Unknown `{k}` found in kwargs.')
+                    raise ValueError(f"Unknown `{k}` found in kwargs.")
 
-        inputs = kwargs.pop('inputs', None) or kwargs.pop('input', None)
-        outputs = kwargs.pop('outputs', None) or kwargs.pop('output', None)
+        inputs = kwargs.pop("inputs", None) or kwargs.pop("input", None)
+        outputs = kwargs.pop("outputs", None) or kwargs.pop("output", None)
 
         if inputs is None:
             inputs = generic_utils.flatten(args[0])
         elif isinstance(inputs, (list, tuple)):
             inputs = generic_utils.flatten(inputs)
         elif isinstance(inputs, dict):
-            raise TypeError('`dict` is not supported yet in inputs/input argument.')
+            raise TypeError("`dict` is not supported yet in inputs/input argument.")
 
         if outputs is None:
             outputs = generic_utils.flatten(args[1])
         elif isinstance(outputs, (list, tuple)):
             outputs = generic_utils.flatten(outputs)
         elif isinstance(outputs, dict):
-            raise TypeError('`dict` is not supported yet in outputs/output argument.')
+            raise TypeError("`dict` is not supported yet in outputs/output argument.")
 
-        self._output_names = op.attrgetter("name")(*outputs)
+        self._output_names = [output.name for output in outputs]
         return inputs, outputs
 
     def _create_graph(self):
@@ -96,5 +95,6 @@ class GraphV3(_Model):
                 )
         return op.itemgetter(*self._output_names)(outputs)
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, *args, **kwargs):
+        inputs = [inputs, *args]
         return self.call_with_external_weights(self.weights, inputs, **kwargs)

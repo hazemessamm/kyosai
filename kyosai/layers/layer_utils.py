@@ -1,4 +1,3 @@
-from functools import partial
 import inspect
 
 import numpy as np

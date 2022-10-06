@@ -20,7 +20,9 @@ class FullPassOutput(NamedTuple):
 # Not efficient approach, will be removed or modified
 class InnerGraph:
     def __init__(self, inputs, outputs):
-        self.inputs, self.outputs = generic_utils.flatten(inputs), generic_utils.flatten(outputs)
+        self.inputs, self.outputs = generic_utils.flatten(
+            inputs
+        ), generic_utils.flatten(outputs)
         self._layers_mapping: Dict[str, Layer] = OrderedDict()
         self._dependencies = OrderedDict()
         self._output_names = [output.name for output in self.outputs]
@@ -92,7 +94,7 @@ class _Model(Layer):
     @property
     def weights(self):
         return [l.weights for l in self.layers]
-    
+
     @property
     def trainable_weights(self):
         return [l.trainable_weights for l in self.layers]
@@ -147,7 +149,9 @@ class _Model(Layer):
 
     def predict_with_external_weights(self, weights, inputs, **kwargs):
         kwargs.pop("training", None)
-        return self.call_with_external_weights(weights, inputs, training=False, **kwargs)
+        return self.call_with_external_weights(
+            weights, inputs, training=False, **kwargs
+        )
 
     def call(self, inputs, **kwargs):
         raise NotImplementedError("`call` should be implemented in a subclass.")
@@ -172,17 +176,22 @@ class _Model(Layer):
 
     def compute_forward_and_backward_pass(self, x, y) -> FullPassOutput:
         if not self.is_subclass:
+
             def grad_fn(weights, x, y):
                 preds = self.call_with_external_weights(weights, x)
                 loss_val = self._compute_loss(y, preds)
                 return (loss_val, preds)
+
         else:
+
             def grad_fn(weights, x, y):
                 preds = self.inner_graph.call_with_external_weights(weights, x)
                 loss_val = self._compute_loss(y, preds)
                 return (loss_val, preds)
-        
-        (loss, predictions), grads = jax.value_and_grad(grad_fn, argnums=0, has_aux=True)(self.weights, x, y)
+
+        (loss, predictions), grads = jax.value_and_grad(
+            grad_fn, argnums=0, has_aux=True
+        )(self.weights, x, y)
         return FullPassOutput(predictions=predictions, loss=loss, gradients=grads)
 
     def test_step(self, validation_dataset):

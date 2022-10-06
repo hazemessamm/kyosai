@@ -87,9 +87,7 @@ class Dense(Layer):
         dtype: str = "float32",
         **kwargs,
     ):
-        super(Dense, self).__init__(
-            seed=seed, trainable=trainable, dtype=dtype
-        )
+        super(Dense, self).__init__(seed=seed, trainable=trainable, dtype=dtype)
         self.units = units
         self.activation = self.get_activation(activation)
         self.kernel_initializer = self.get_initializer(kernel_initializer)
@@ -317,6 +315,7 @@ class Reshape(Layer):
     Args:
         target_shape: accepts the target shape as a `tuple`.
     """
+
     def __init__(self, target_shape, name=None):
         super(Reshape, self).__init__(name=name)
         self.target_shape = target_shape
@@ -345,6 +344,7 @@ class Squeeze(Layer):
     Args:
         axis: accepts the target axis as a `int`.
     """
+
     def __init__(self, axis, name=None):
         super(Squeeze, self).__init__(name=name)
         self.axis = axis
