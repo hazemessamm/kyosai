@@ -91,7 +91,7 @@ ys = np.random.random((64, 1))
 
 model.compile(loss='binary_crossentropy', optimizer='adam')
 
-
+model.fit(xs, ys, epochs=1, batch_size=8)
 
 ```
 ---
