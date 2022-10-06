@@ -7,12 +7,11 @@ from kyosai.layers import base_layer
 class GraphRecorder:
     '''
         Created and records the operations that happens inside the 
-        call function if the user decides to create a `Model` subclass.
+        `call` function if the user decides to create a `Model` subclass.
     '''
     def __init__(self):
         self.latest_shape = None
         self.from_layer = None
-        self.first_call = True
         self.input_layers = []
         self.output_layers = set()
 

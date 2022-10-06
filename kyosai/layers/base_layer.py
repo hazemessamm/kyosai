@@ -217,20 +217,15 @@ class Layer(abc.ABC):
         return input_shape, arg_shapes, kwarg_shapes
 
     def dummy_call(self, inputs, *args, **kwargs):
-        if inputs.first_call:
-            inputs.first_call = False
-            out = self.call(inputs, *args, **kwargs)
-            return out
-        else:
-            if inputs.latest_layer is not None:
-                inputs_shape, args_shape, kwargs_shape = self.parse_for_build(
-                    inputs, *args, **kwargs
-                )
-                self.build(inputs_shape, *args_shape, **kwargs_shape)
-                self.connect(inputs.latest_layer, *args, **kwargs)
-            inputs.latest_shape = self.shape
-            inputs.latest_layer = self
-            return inputs
+        if inputs.latest_layer is not None:
+            inputs_shape, args_shape, kwargs_shape = self.parse_for_build(
+                inputs, *args, **kwargs
+            )
+            self.build(inputs_shape, *args_shape, **kwargs_shape)
+            self.connect(inputs.latest_layer, *args, **kwargs)
+        inputs.latest_shape = self.shape
+        inputs.latest_layer = self
+        return inputs
 
     def build_for_layer(self, inputs, *args, **kwargs):
         # temporary and will be removed or modified

@@ -118,7 +118,7 @@ class _Model(Layer):
         if not self.built:
             args = inspect.getfullargspec(self.call).args[1:]
             dummy_inputs = [graph_recorder.GraphRecorder() for i in range(len(args))]
-            self(*dummy_inputs)
+            self.call(*dummy_inputs)
             self.is_subclass = True
 
             inputs = [di.input_layers for di in dummy_inputs]
