@@ -1,4 +1,4 @@
-from typing import NamedTuple, Union
+from typing import Union
 
 import optax  # type:ignore
 from jax import jit

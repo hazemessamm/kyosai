@@ -2,6 +2,7 @@ import jax  # type: ignore
 from jax import lax
 from jax import numpy as jnp  # type: ignore
 from kyosai.layers.base_layer import Layer
+from typing import Union, List, Tuple
 
 
 class Embedding(Layer):
@@ -40,15 +41,12 @@ class Embedding(Layer):
         self.mask_zero = mask_zero
         self.input_length = input_length
 
-    @property
-    def shape(self):
-        return self._output_shape
+    def compute_output_shape(self, input_shape: Union[List, Tuple]):
+        return (None, None, self.embedding_dim)
 
     def build(self, input_shape):
-        self._input_shape = input_shape
-        self.input_length = input_shape[-1]
+        self.input_shape = input_shape
         shape = (self.vocab_size, self.embedding_dim)
-        self._output_shape = (self.input_length, self.embedding_dim)
         self.add_weight(
             self.seed,
             shape,

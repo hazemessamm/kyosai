@@ -1,6 +1,7 @@
 from jax.numpy import DeviceArray
 from jax.random import PRNGKey
 from kyosai.initializers import Initializer, initializers
+import jax
 
 
 class Weight:
@@ -20,12 +21,14 @@ class Weight:
         self.trainable = trainable
         self.dtype = dtype
         self.built = False
+        self.weights = None
+        self._called_from_eval_mode = False
 
-    def get_weights(self, rebuild: bool = False):
-        if self.built and not rebuild:
-            return self.weights
-        self.weights = self.initializer(self.key, self.shape, self.dtype)
-        self.built = True
+    def get_weights(self):
+        if self.weights is None:
+            weights = self.initializer(self.key, self.shape, self.dtype)
+            self.weights = weights
+            return weights
         return self.weights
 
     def set_weights(self, weights: DeviceArray):
@@ -67,3 +70,17 @@ class NodeContainer:
 
 class MetricsContainer:
     pass
+
+
+# class KyosaiShapedArray(jax.core.ShapedArray):
+#     def __init__(self, key, shape, initializer, dtype, name, trainable, weak_type=False, named_shape=None):
+#         super().__init__(shape, dtype, weak_type=False, named_shape=None)
+#         self.key = key
+#         self.shape = shape
+#         self.initializer = initializer
+#         self.trainable = trainable
+#         self.name = name
+#         self._initalized = False
+
+#     def initialize(self):
+#         self.__class__ = Weight

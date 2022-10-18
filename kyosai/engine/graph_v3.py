@@ -14,10 +14,9 @@ class GraphV3(_Model):
         self.inputs, self.outputs = self._parse_args_and_kwargs(*args, **kwargs)
         self._layers_mapping: Dict[str, Layer] = OrderedDict()
         self._dependencies = OrderedDict()
-        # self._weights = []
         self._output_names = [output.name for output in self.outputs]
         self._create_graph()
-        generic_utils.jit_call(self)
+        # generic_utils.jit_call(self)
 
     @property
     def output(self):
@@ -48,6 +47,8 @@ class GraphV3(_Model):
             inputs = generic_utils.flatten(inputs)
         elif isinstance(inputs, dict):
             raise TypeError("`dict` is not supported yet in inputs/input argument.")
+        else:
+            inputs = generic_utils.flatten(inputs)
 
         if outputs is None:
             outputs = generic_utils.flatten(args[1])
@@ -55,9 +56,16 @@ class GraphV3(_Model):
             outputs = generic_utils.flatten(outputs)
         elif isinstance(outputs, dict):
             raise TypeError("`dict` is not supported yet in outputs/output argument.")
+        else:
+            outputs = generic_utils.flatten(outputs)
 
         self._output_names = [output.name for output in outputs]
+        self.build_from_signature(inputs)
         return inputs, outputs
+
+    def build_from_signature(self, inputs):
+        self.input_shape = [i.shape for i in inputs]
+        self.built = True
 
     def _create_graph(self):
         layers = jax.util.toposort(self.outputs)
@@ -71,13 +79,18 @@ class GraphV3(_Model):
                 parents = [parent_layer.name for parent_layer in layer.parents]
             self._dependencies[layer.name] = parents
             self._layers_mapping[layer.name] = layer
-            # self._weights.append(layer.weights)
             self._layers = layers
             self.built = True
 
     def call_with_external_weights(self, weights, inputs, **kwargs):
         if not isinstance(inputs, list):
             inputs = [inputs]
+
+        if len(inputs) != len(self.inputs):
+            raise Exception(
+                f"Expected {len(self.inputs)} inside a list or a tuple. Recieved: {len(inputs)} input/s."
+            )
+
         outputs = {f"arg:{i}": inputs[i] for i in range(len(inputs))}
 
         for weight, (layer, parent_layers) in zip(weights, self._dependencies.items()):
@@ -96,5 +109,4 @@ class GraphV3(_Model):
         return op.itemgetter(*self._output_names)(outputs)
 
     def call(self, inputs, *args, **kwargs):
-        inputs = [inputs, *args]
         return self.call_with_external_weights(self.weights, inputs, **kwargs)

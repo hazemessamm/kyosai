@@ -110,18 +110,18 @@ class Uniform(Initializer):
 
 
 supported_initializations = {
-    "zeros": Zeros(),
-    "ones": Ones(),
-    "glorot_uniform": GlorotUniform(),
-    "glorot_normal": GlorotNormal(),
-    "he_normal": HeNormal(),
-    "he_uniform": HeUniform(),
-    "kaiming_normal": KaimingNormal(),
-    "kaiming_uniform": KaimingUniform(),
-    "lecun_normal": LecunNormal(),
-    "lecun_uniform": LecunUniform(),
-    "normal": Normal(),
-    "uniform": Uniform(),
+    "zeros": jax_initializers.zeros,
+    "ones": jax_initializers.ones,
+    "glorot_uniform": jax_initializers.glorot_uniform(),
+    "glorot_normal": jax_initializers.glorot_normal(),
+    "he_normal": jax_initializers.he_normal(),
+    "he_uniform": jax_initializers.he_uniform(),
+    "kaiming_normal": jax_initializers.kaiming_normal(),
+    "kaiming_uniform": jax_initializers.kaiming_uniform(),
+    "lecun_normal": jax_initializers.lecun_normal(),
+    "lecun_uniform": jax_initializers.lecun_uniform,
+    "normal": jax_initializers.normal(),
+    "uniform": jax_initializers.uniform(),
 }
 
 

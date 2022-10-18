@@ -1,4 +1,5 @@
 import jax
+from jax import lax
 
 _PRECISION = "float32"
 _IS_JIT_ENABLED = True
@@ -63,6 +64,32 @@ def device_put(x, id):
     else:
         device = available_devices[id]
     return jax.device_put(x, device)
+
+
+def apply_activation(inputs, activation):
+    return lax.cond(activation is not None, lambda: activation(inputs), lambda: inputs)
+
+
+def bias_add(inputs, weights, use_bias=True):
+    if not use_bias:
+        return inputs
+    bias = weights[1]
+    return jax.numpy.add(inputs, bias)
+
+
+def weight_matmul(inputs, weights):
+    weights = weights[0]
+    return jax.numpy.matmul(inputs, weights)
+
+
+def apply_conv_general_dilated(inputs, weights, strides, padding, dimension_numbers):
+    return lax.conv_general_dilated(
+        lhs=inputs,
+        rhs=weights[0],
+        window_strides=strides,
+        padding=padding,
+        dimension_numbers=dimension_numbers,
+    )
 
 
 def get_model_gradients(model, loss):

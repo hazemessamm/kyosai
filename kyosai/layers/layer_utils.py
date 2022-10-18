@@ -39,6 +39,10 @@ class CallFunctionUtil:
     def __init__(self, func):
         self._func_specs = inspect.getfullargspec(func)
         self._arg_names = self._func_specs.args + (self._func_specs.kwonlyargs or [])
+
+        if self._arg_names[0] == "self":
+            self._arg_names = self._arg_names[1:]
+
         self._num_args = len(self._arg_names)
         self._has_training_arg = "training" in self._arg_names
         self._has_mask_arg = "mask" in self._arg_names
@@ -83,6 +87,6 @@ class CallFunctionUtil:
         else:
             if self._arg_names[0] in kwargs:
                 inputs = kwargs.pop(self._arg_names[0])
-        if len(args) > 1:
+        if self._num_args > 1:
             self._requires_unpacking = True
         return inputs, args, kwargs

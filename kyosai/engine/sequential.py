@@ -9,24 +9,27 @@ class Sequential(Model):
         super(Sequential, self).__init__(sequential=True, **kwargs)
 
         self._layers: List[Layer] = layers if layers is not None else []
-        self._weights: List[Tuple] = []
         self.setup_layers()
 
-    def setup_layers(self):
-        if len(self._layers) == 0:
-            return
-        for i in range(1, len(self._layers)):
-            self._layers[i](self._layers[i - 1])
+    def build_from_signature(self, first_layer):
+        self.input_shape = first_layer.input_shape
+        if len(self.input_shape) == 1:
+            self.input_shape = self.input_shape[0]
+        self.built = True
 
-        for layer in self._layers:
-            self._weights.append(layer.weights)
+    def setup_layers(self):
+        layers = self.layers
+        for parent_layer, child_layer in zip(layers, layers[1:]):
+            child_layer(parent_layer)
+        self.build_from_signature(self._layers[0])
 
     def add(self, layer: Layer):
         if isinstance(layer, Layer):
-            if len(self._layers) >= 1:
+            if len(self._layers) > 1:
                 layer(self._layers[-1])
+            else:
+                self.build_from_signature(layer)
             self._layers.append(layer)
-            self.weights.append(layer.weights)
         else:
             raise ValueError(
                 f"add() only accepts layers subclass instances. Recieved: {layer}"

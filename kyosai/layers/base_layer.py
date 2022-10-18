@@ -1,7 +1,9 @@
 from typing import Any, List, Tuple, Union
-
+import jax
 from jax.interpreters.partial_eval import DynamicJaxprTracer
-from jax.numpy import DeviceArray, ndarray
+from jax.numpy import DeviceArray
+from jax.numpy import ndarray as jax_ndarray
+from numpy import ndarray as numpy_ndarray
 from jax.random import PRNGKey
 from kyosai import activations, backend
 from kyosai.engine.containers import NodeContainer, Weight
@@ -19,9 +21,9 @@ class Layer(abc.ABC):
         trainable: bool = True,
         dtype: str = "float32",
         name: str = None,
+        **kwargs,
     ):
         self.name = backend.memoize(self.__class__.__name__ if name is None else name)
-        layer_utils.jit_layer_call(self)
 
         # Stores the layer weights
         self._weights = []
@@ -33,18 +35,52 @@ class Layer(abc.ABC):
         self._has_nested_layers = False
         self._layers = []
         self._is_nested = False
+        self._in_eval_mode = False
+        self._input_shape = None
+        self._output_shape = None
         self._call_util = layer_utils.CallFunctionUtil(self.call)
+
+        input_shape = kwargs.get("input_shape", None)
+
+        if input_shape:
+            self.input_shape = input_shape
+
+        # layer_utils.jit_layer_call(self)
         layer_utils.validate_layer_options(self)
+
+    def track_nested_layer(self, layer):
+        if not self._has_nested_layers:
+            self._has_nested_layers = True
+
+        self._layers.append(layer)
+        layer._is_nested = True
 
     def __setattr__(self, __name: str, __value: Any) -> None:
         if isinstance(__value, Layer):
-            if not self._has_nested_layers:
-                self._has_nested_layers = True
-                self._layers = [__value]
-            else:
-                self._layers.append(__value)
-            __value._is_nested = True
+            self.track_nested_layer(__value)
         return super().__setattr__(__name, __value)
+
+    @property
+    def input_shape(self):
+        if self._input_shape is None:
+            return None
+
+        num_build_args = len(inspect.getfullargspec(self.build).args[1:])
+        if num_build_args > 1 and not isinstance(self._input_shape, list):
+            return [self._input_shape]
+        return self._input_shape
+
+    @input_shape.setter
+    def input_shape(self, val):
+        if isinstance(val, list):
+            self._input_shape = [(None, *v) if v[0] is not None else v for v in val]
+        else:
+            if self._input_shape is not None and self._input_shape[0] is not None:
+                self.input_shape = (None, *self._input_shape)
+            elif self._input_shape is None and val[0] is not None:
+                self._input_shape = (None, *val)
+            else:
+                self._input_shape = val
 
     @property
     def nested_layers(self):
@@ -52,58 +88,114 @@ class Layer(abc.ABC):
 
     @property
     def shape(self):
-        return None
+        if self.input_shape is None:
+            raise Exception(
+                f"Error in layer {self}. This layer does not have input_shape. Build it, pass an `Input` instance to it or pass `input_shape` to `__init__`."
+            )
+        if self._output_shape is not None:
+            return self._output_shape
+
+        self._output_shape = self.evaluate_forward_methods(self.input_shape)
+
+        num_build_args = len(inspect.getfullargspec(self.build).args[1:])
+        if num_build_args > 1 and not isinstance(out_shape, list):
+            out_shape = [out_shape]
+            self._output_shape = [
+                (None, *v[1:]) if v[0] is not None else v for v in out_shape
+            ]
+        else:
+            if self._output_shape[0] is not None:
+                self._output_shape = (None, *self._output_shape[1:])
+
+        return self._output_shape
 
     @property
     def parents(self):
         return self._node_container.inbound_nodes
 
-    def compute_output_shape(self, input_shape: Union[List, Tuple]):
+    def compute_output_shape(self, input_shape):
         raise NotImplementedError(
-            f"Error in layer {self}. Should be implemented in a subclass."
+            "`compute_output_shape` method should be implemented in a subclass."
         )
 
-    @property
-    def input_shape(self):
-        if self.built:
-            return self._input_shape
-        raise Exception(f"Error in {self.name}, Layer is not built yet")
+    def evaluate_forward_methods(self, input_shape: List):
+        "Computes the output shape given the specified arguments when instantiated."
+        try:
+            output_shape = self.compute_output_shape(input_shape=input_shape)
+            return output_shape
+        except NotImplementedError:
+            pass
+
+        dummy_batch_size = 1
+        if isinstance(input_shape, list):
+            inputs = []
+            for inp_shape in input_shape:
+                if inp_shape[0] is None:
+                    current_shape = (dummy_batch_size, *inp_shape[1:])
+                else:
+                    current_shape = (dummy_batch_size, *inp_shape)
+                inputs.append(
+                    jax.core.ShapedArray(shape=current_shape, dtype=self.dtype)
+                )
+        else:
+            if input_shape[0] is None:
+                inputs = (dummy_batch_size, *input_shape[1:])
+                inputs = jax.core.ShapedArray(shape=inputs, dtype=self.dtype)
+            else:
+                inputs = jax.core.ShapedArray(shape=input_shape, dtype=self.dtype)
+
+        self._in_eval_mode = True
+        call_shape = jax.eval_shape(self.call, inputs).shape
+        call_with_weights_shape = jax.eval_shape(
+            self.call_with_external_weights, self.weights, inputs
+        ).shape
+        self._in_eval_mode = False
+        if call_shape != call_with_weights_shape:
+            raise Exception(
+                f"`call` method output shape does not match `call_with_external_weights` output shape. {call_shape} != {call_with_weights_shape}."
+            )
+        else:
+            return call_shape
+
+    def _get_weights(self, trainable_only=False):
+        if not self.built:
+            self.build(self.input_shape)
+        elif not self._in_eval_mode:
+            if any(isinstance(w.weights, jax.core.Tracer) for w in self._weights):
+                self._weights = []
+                self.build(self.input_shape)
+
+        if not trainable_only:
+            weights = [weight.get_weights() for weight in self._weights]
+            if self._has_nested_layers:
+                nested_weights = tuple(layer.weights for layer in self._layers)
+                weights += nested_weights
+        else:
+            weights = [
+                weight.get_weights() if weight.trainable else ()
+                for weight in self._weights
+            ]
+
+        if self._has_nested_layers:
+            nested_weights = tuple(layer.trainable_weights for layer in self._layers)
+            weights += nested_weights
+        weights = tuple(weights)
+        return weights
 
     @property
     def weights(self):
-        if not self.built:
-            raise Exception(
-                f"Error in layer {self}. Layer is not built yet. use `build()` method."
-            )
-        weights = [weight.get_weights() for weight in self._weights]
-        if self._has_nested_layers:
-            nested_weights = tuple(layer.weights for layer in self._layers)
-            weights.extend(nested_weights)
-        return tuple(weights)
-
-    @property
-    def named_weights(self):
-        return {weight.name: weight.get_weights() for weight in self._weights}
+        weights = self._get_weights(trainable_only=False)
+        self._weights_instantiated = True
+        return weights
 
     @property
     def trainable_weights(self):
-        if not self.built:
-            raise Exception(
-                f"Error in layer {self}. Layer is not built yet. use `build()` method."
-            )
-
-        weights = [
-            weight.get_weights() if weight.trainable else () for weight in self._weights
-        ]
-        if self._has_nested_layers:
-            nested_weights = tuple(layer.trainable_weights for layer in self._layers)
-            weights.extend(nested_weights)
-        return tuple(weights)
+        weights = self._get_weights(trainable_only=True)
+        return weights
 
     def build(self, input_shape: Tuple):
-        raise NotImplementedError(
-            f"Error in layer {self}. Should be implemented in a subclass."
-        )
+        self.input_shape = input_shape
+        self.built = True
 
     def get_initializer(self, identifier: Union[str, Initializer]):
         "Returns the specified initializer"
@@ -194,7 +286,7 @@ class Layer(abc.ABC):
                 )
 
     def parse_for_build(self, inputs, *args, **kwargs):
-        fn_args = inspect.getfullargspec(self.build).args
+        fn_args = inspect.getfullargspec(self.build).args[1:]
         if isinstance(inputs, list):
             input_shape = [getattr(i, "shape", None) for i in inputs]
         else:
@@ -240,6 +332,7 @@ class Layer(abc.ABC):
         inputs_shape, args_shape, kwargs_shape = self.parse_for_build(
             inputs, *args, **kwargs
         )
+
         self.build(inputs_shape, *args_shape, **kwargs_shape)
         self.connect(inputs, *args, **kwargs)
         return self
@@ -258,25 +351,37 @@ class Layer(abc.ABC):
         inputs_shape, args_shape, kwargs_shape = self.parse_for_build(
             inputs, *args, **kwargs
         )
+
         self.build(inputs_shape, *args_shape, **kwargs_shape)
+        if all([isinstance(i, Layer) for i in inputs]):
+            self.connect(inputs, *args, **kwargs)
+            return self
+        else:
+            return self.call(inputs, *args, **kwargs)
 
     def __call__(self, *args, **kwargs):
+
+        # cases:
+        # 1. if a model subclassed and should traverse through call function
+        # 2. if the input is a layer\s
+        # a. it can be 1 layer, list of layers, multiple inputs as layers.
+        # 3. if the input is a tensor\s
+        # 4. if the layer is already built but will pass to it another layer
+        # 5. if a model is passed
         inputs, args, kwargs = self._call_util.parse_args(*args, **kwargs)
+
         if isinstance(inputs, graph_recorder.GraphRecorder):
             return self.dummy_call(inputs, *args, **kwargs)
 
         if not self.built:
             if isinstance(inputs, (Layer)):
                 return self.build_for_layer(inputs, *args, **kwargs)
-            elif isinstance(inputs, (ndarray, DeviceArray, DynamicJaxprTracer)):
+            elif isinstance(
+                inputs, (jax_ndarray, numpy_ndarray, DeviceArray, DynamicJaxprTracer)
+            ):
                 return self.build_and_call_for_tensors(inputs, *args, **kwargs)
             elif isinstance(inputs, (list, tuple)):
-                self.build_for_list(inputs, *args, **kwargs)
-                if all([isinstance(i, Layer) for i in inputs]):
-                    self.connect(inputs, *args, **kwargs)
-                    return self
-                else:
-                    return self.call(inputs, *args, **kwargs)
+                return self.build_for_list(inputs, *args, **kwargs)
             else:
                 raise ValueError(
                     f"Error in layer {self}. "
@@ -292,14 +397,20 @@ class Layer(abc.ABC):
                 return self.call(inputs, *args, **kwargs)
 
     @abc.abstractmethod
-    def call(self, inputs: DeviceArray, weights: Tuple = None, **kwargs):
+    def call(self, inputs: DeviceArray, **kwargs):
+        raise NotImplementedError(
+            "This method should be implemented in Layer subclasses"
+        )
+
+    @abc.abstractmethod
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
         raise NotImplementedError(
             "This method should be implemented in Layer subclasses"
         )
 
     def __repr__(self):
-        if self.built and getattr(self, "input_shape", None):
-            return f"<{self.name} Layer with input shape {self.input_shape} and output shape {self.shape}>"
+        if self._input_shape is not None and self._output_shape is not None:
+            return f"<{self.name} Layer with input shape {self.input_shape} and output shape {self.shape[0]}>"
         else:
             return f"<{self.name} Layer>"
 

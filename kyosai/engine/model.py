@@ -1,20 +1,21 @@
 import inspect
-from typing import NamedTuple
+import operator as op
+from collections import OrderedDict
+from typing import Dict, List, NamedTuple, Tuple, Union
+
+import jax
+from jax.numpy import DeviceArray
 from kyosai import backend, losses, optimizers
-from kyosai.engine import data_adapter, graph_recorder
+from kyosai.engine import data_adapter, generic_utils, graph_recorder
 from kyosai.engine.utils import ProgressBar
 from kyosai.layers.base_layer import Layer
-import jax
-from collections import OrderedDict
-from typing import Dict
-from kyosai.engine import generic_utils
-import operator as op
+from kyosai.optimizers.optimizers import Optimizer
 
 
 class FullPassOutput(NamedTuple):
-    predictions: jax.numpy.DeviceArray
-    loss: jax.numpy.DeviceArray
-    gradients: tuple
+    predictions: DeviceArray
+    loss: DeviceArray
+    gradients: Tuple
 
 
 # Not efficient approach, will be removed or modified
@@ -27,13 +28,13 @@ class InnerGraph:
         self._dependencies = OrderedDict()
         self._output_names = [output.name for output in self.outputs]
         self._create_graph()
-        generic_utils.jit_call(self)
+        # generic_utils.jit_call(self)
 
     @property
-    def output(self):
-        return self.outputs[0] if len(self.outputs) == 1 else []
+    def output(self) -> Union[List, Layer]:
+        return self.outputs[0] if len(self.outputs) == 1 else self.outputs
 
-    def _create_graph(self):
+    def _create_graph(self) -> None:
         layers = jax.util.toposort(self.outputs)
 
         num_inputs = 0
@@ -48,7 +49,7 @@ class InnerGraph:
             self._layers = layers
             self.built = True
 
-    def call_with_external_weights(self, weights, inputs, **kwargs):
+    def call_with_external_weights(self, weights: Tuple, inputs: DeviceArray, **kwargs):
         if not isinstance(inputs, list):
             inputs = [inputs]
         outputs = {f"arg:{i}": inputs[i] for i in range(len(inputs))}
@@ -87,23 +88,32 @@ class _Model(Layer):
         self.metrics_values = {}
         self.is_subclass = False
 
+    def compute_output_shape(self, input_shape: Union[List, Tuple]):
+        if self.sequential:
+            return self.layers[-1].shape
+        else:
+            if len(self.outputs) == 1:
+                return self.outputs[0].shape
+            else:
+                return [o.shape for o in self.outputs]
+
     @property
-    def layers(self):
+    def layers(self) -> List:
         return self._layers
 
     @property
-    def weights(self):
+    def weights(self) -> List:
         return [l.weights for l in self.layers]
 
     @property
-    def trainable_weights(self):
+    def trainable_weights(self) -> List:
         return [l.trainable_weights for l in self.layers]
 
     @property
-    def compiled(self):
+    def compiled(self) -> bool:
         return self._compiled
 
-    def _record_graph(self):
+    def _record_graph(self) -> None:
         if not self.built:
             args = inspect.getfullargspec(self.call).args[1:]
             dummy_inputs = [graph_recorder.GraphRecorder() for i in range(len(args))]
@@ -114,7 +124,9 @@ class _Model(Layer):
             outputs = [list(di.output_layers) for di in dummy_inputs]
             self.inner_graph = InnerGraph(inputs=inputs, outputs=outputs)
 
-    def compile(self, loss, optimizer, metrics=None):
+    def compile(
+        self, loss: losses.Loss, optimizer: Optimizer, metrics: List = None
+    ) -> None:
         self._record_graph()
 
         self.compiled_loss = losses.get(loss)
@@ -129,25 +141,22 @@ class _Model(Layer):
         self.compiled_optimizer._initialize(self.weights)
         self._compiled = True
 
-    # TODO: implement `build()` method
-    def build(self, input_shape):
-        pass
-
-    def set_weights(self, weights):
+    def set_weights(self, weights: Tuple) -> None:
         "Set new weights on every layer"
         for layer, w in zip(self.layers, weights):
             layer.set_weights(w)
-        self._weights = weights
 
-    def update_weights(self, updated_weights):
+    def update_weights(self, updated_weights: Tuple) -> None:
         for layer, w in zip(self.layers, updated_weights):
             layer.update_weights(w)
 
-    def predict(self, inputs, **kwargs):
+    def predict(self, inputs: DeviceArray, **kwargs) -> Union[Tuple, List, DeviceArray]:
         kwargs.pop("training", None)
         return self.call(inputs, training=False, **kwargs)
 
-    def predict_with_external_weights(self, weights, inputs, **kwargs):
+    def predict_with_external_weights(
+        self, weights: Tuple, inputs: Union[Tuple, List, DeviceArray], **kwargs
+    ) -> Union[Tuple, List, DeviceArray]:
         kwargs.pop("training", None)
         return self.call_with_external_weights(
             weights, inputs, training=False, **kwargs
@@ -161,20 +170,24 @@ class _Model(Layer):
             "`call_with_external_weights` should be implemented in a subclass."
         )
 
-    def train_step(self, x, y):
+    def train_step(
+        self, x: Union[Tuple, List, DeviceArray], y: Union[Tuple, List, DeviceArray]
+    ) -> Dict:
         "Returns loss value and takes training batch"
         forward_backward_output = self.compute_forward_and_backward_pass(x, y)
         self.minimize(self.weights, forward_backward_output.gradients)
         return {"Loss": forward_backward_output.loss}
 
-    def _compute_loss(self, y, y_pred):
+    def _compute_loss(self, y: DeviceArray, y_pred: DeviceArray) -> DeviceArray:
         return self.compiled_loss(y, y_pred)
 
-    def minimize(self, weights, gradients):
+    def minimize(self, weights: Tuple, gradients: Tuple):
         new_weights = self.compiled_optimizer.minimize(weights, gradients)
         self.update_weights(new_weights)
 
-    def compute_forward_and_backward_pass(self, x, y) -> FullPassOutput:
+    def compute_forward_and_backward_pass(
+        self, x: jax.numpy.DeviceArray, y: jax.numpy.DeviceArray
+    ) -> FullPassOutput:
         if not self.is_subclass:
 
             def grad_fn(weights, x, y):
@@ -194,20 +207,20 @@ class _Model(Layer):
         )(self.weights, x, y)
         return FullPassOutput(predictions=predictions, loss=loss, gradients=grads)
 
-    def test_step(self, validation_dataset):
+    def test_step(self, validation_dataset: data_adapter.DataAdapter) -> Dict:
         avg_valid_loss = 0
         for _ in range(validation_dataset.num_batches):
             batch_x, batch_y = validation_dataset.get_batch()
             avg_valid_loss += self.loss(batch_x, batch_y)
         return {"Validation loss": avg_valid_loss}
 
-    def _test_step(self, validation_dataset):
+    def _test_step(self, validation_dataset: data_adapter.DataAdapter) -> Dict:
         if validation_dataset is None:
             return {}
         else:
             return self.test_step(validation_dataset)
 
-    def _assert_compiled(self):
+    def _assert_compiled(self) -> None:
         if not self.compiled:
             raise Exception("Model is not compiled, use `compile()` method")
 
