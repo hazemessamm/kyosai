@@ -224,7 +224,7 @@ class Reshape(Layer):
         target_shape: accepts the target shape as a `tuple`.
     """
 
-    def __init__(self, target_shape, name=None):
+    def __init__(self, target_shape, name=None, **kwargs):
         super(Reshape, self).__init__(name=name, **kwargs)
         self.target_shape = target_shape
 
@@ -252,7 +252,7 @@ class Squeeze(Layer):
         axis: accepts the target axis as a `int`.
     """
 
-    def __init__(self, axis, name=None):
+    def __init__(self, axis, name=None, **kwargs):
         super(Squeeze, self).__init__(name=name, **kwargs)
         self.axis = axis
 
